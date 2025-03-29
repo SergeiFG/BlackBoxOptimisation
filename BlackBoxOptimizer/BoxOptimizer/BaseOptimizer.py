@@ -16,25 +16,73 @@ else:
 
 
 
-class OptimizedVectorData:
+class OptimizedVectorData(object):
     
     # Перечисление индексов во внутреннем массиве класса
-    value_index : int = 0
-    min_index   : int = 1
-    max_index   : int = 2
+    min_index          : int = 0
+    max_index          : int = 1
+    values_index_start : int = 2
+    
+    # Полежение векторов
+    axis_X : int = 0
+    axis_Y : int = 1
 
     def __init__(
         self,
-        size : int) -> None:
+        vec_size : int,
+        vec_candidates_size : int = 1
+        ) -> None:
+        """
         
-        self._vec_size : int = size
+        Аргументы:
+            vec_size            : int - Размерность вектора
+            vec_candidates_size : int - Количество векторов кандидатов (по умолчанию 1)
+        """
+        # Корректность атрибута vec_size
+        if vec_size is None:
+            raise ValueError("Значение параметра vec_size не может быть None")
+        if not isinstance(vec_size, int):
+            raise TypeError("Передан неверный тип параметра vec_size")
+        if vec_size <= 0:
+            raise ValueError("Значение размера vec_size не может быть меньше либо равно 0")
+
+        # Корректность атрибута vec_candidates_size
+        if vec_candidates_size is None:
+            raise ValueError("Значение параметра vec_candidates_size не может быть None")
+        if not isinstance(vec_candidates_size, int):
+            raise TypeError("Передан неверный тип параметра vec_candidates_size")
+        if vec_candidates_size <= 0:
+            raise ValueError("Значение размера vec_candidates_size не может быть меньше либо равно 0")
+            
+
+        self._vec_size : int = vec_size
         """Размер хранимого вектора"""
+        self._vec_candidates_size : int = vec_candidates_size
         
         self._vec : np.array = np.array(
-            [[0.0, -np.inf, np.inf] for _ in range(self._vec_size)],
+            [
+                [0.0 for II in range(self._vec_candidates_size + OptimizedVectorData.values_index_start)] \
+                    for I in range(self._vec_size)
+                ],
             dtype = float
         )
-        """Хранимый вектор значений, инициализируемый нулями, хранит занчение минимума и максимума"""
+        self._vec[:, OptimizedVectorData.min_index] = -np.inf
+        self._vec[:, OptimizedVectorData.max_index] =  np.inf
+        """Хранимый вектор значений, инициализируемый нулями, хранит значение минимума и максимума"""
+
+
+
+    def iter_vectors(self) -> np.array:
+        """
+        iter_vectors
+        ---
+        Итератор входящих вектров, без лимитирующих векторов
+        """
+        # TODO: Подумать над управлением доступом
+        for column in range( \
+            np.size(self._vec[OptimizedVectorData.axis_Y]) - OptimizedVectorData.values_index_start):
+            yield self._vec[:, column + OptimizedVectorData.values_index_start]
+
 
 
     @property
@@ -44,13 +92,13 @@ class OptimizedVectorData:
         
         Производит отсечение столбцов значений максимума и минимума доступного для параметра
         """
-        return self._vec[:, OptimizedVectorData.value_index]
+        return self._vec[:, OptimizedVectorData.values_index_start]
 
 
     @vec.setter
     def vec(self, vec) -> None:
         # TODO: Добавить проверки данных для присвоения
-        self._vec[:, OptimizedVectorData.value_index] = vec
+        self._vec[:, OptimizedVectorData.values_index_start] = vec
 
 
     def setLimitation(self, 
@@ -315,14 +363,22 @@ class BaseOptimizer(object):
 
 # Отладка функционала базового генератора
 if __name__ == "__main__":
-    test_BaseOptimizer = BaseOptimizer(
-        to_model_vec_size    = 5,
-        from_model_vec_size  = 4,
-        iter_limit           = 100,
-    )
-    print(test_BaseOptimizer._to_opt_model_data.vec)
-    print(test_BaseOptimizer._to_opt_model_data)
-    print(test_BaseOptimizer.vecToModel)
+    test_OptimizedVectorData = OptimizedVectorData(vec_size = 12, vec_candidates_size = 3)
+    print(test_OptimizedVectorData)
+
+    for item in test_OptimizedVectorData.iter_vectors():
+        print(item)
+
+
+    # test_BaseOptimizer = BaseOptimizer(
+    #     to_model_vec_size    = 5,5
+    #     from_model_vec_size  = 4,
+    #     iter_limit           = 100,
+    # )
+    # print(test_BaseOptimizer._to_opt_model_data.vec)
+    # print(test_BaseOptimizer._to_opt_model_data)
+    # print(test_BaseOptimizer.vecToModel)
     # test_BaseOptimizer.vecToModel = 0
     # print(test_BaseOptimizer.vecFromModel)
     # test_BaseOptimizer.vecFromModel = np.array(np.zeros(76), dtype=float)
+    pass
