@@ -6,6 +6,8 @@ More details.
 from .BaseOptimizer import BaseOptimizer
 
 import numpy as np
+from typing import Callable
+
 
 
 class Optimizer(object):
@@ -50,45 +52,11 @@ class Optimizer(object):
 
 
 
-# TODO: Продумать архитекутру обращения к модели оптимизации. Пока простой доступ через 
-#       относительно защищенные атрибуты
-
-    def AlgIter(self):
+    def modelOptimize(self, func : Callable[[np.array], np.array]) -> None:
         """
-        AlgIter 
+        modelOptimize
         ---
-        Итератор работы с алгоритмом 
-        
+        Запуск оптимизации через передачу функции черного ящика
         """
-        return self._CurrentOptimizerObject.AlgIter()
+        self._CurrentOptimizerObject.modelOptimize(func)
 
-    # Пока просто ретранслируем на класс выше, позже подумать в рамках архитектурной реализации обра-
-    # щения к модели
-    @property
-    def vecToModel(self) -> np.array:
-        """Вектор, оправляемый в модель оптимизации"""
-        return self._CurrentOptimizerObject.vecToModel
-
-    @property
-    def vecFromModel(self) -> None:
-        # raise AttributeError("Чтение атрибута не допускается")
-        return self._CurrentOptimizerObject.vecFromModel
-
-    @vecFromModel.setter
-    def vecFromModel(self, new_value : np.array) -> None:
-        """Установка значений, полученных от модели"""
-        self._CurrentOptimizerObject.vecFromModel = new_value
-
-    @property
-    def objFuncValue(self) -> float | None:
-        """
-        Чтиение установленного значения целевой функции
-        """
-        return self._CurrentOptimizerObject.objFuncValue
-    
-    @objFuncValue.setter
-    def objFuncValue(self, new_val : float | int | None) -> None:
-        """
-        Установка занчения целевой функции от модели
-        """
-        self._CurrentOptimizerObject.objFuncValue = new_val

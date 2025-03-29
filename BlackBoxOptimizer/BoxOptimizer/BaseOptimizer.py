@@ -8,11 +8,16 @@ BaseOptimizer
 
 """
 
+# Подключаемые модули независимой конфигурации
+from typing import TypeVar, Callable, Tuple
+import numpy as np
+
+
 # Подключаемые модули зависимой конфигурации
 if __name__ == "__main__":
-    import numpy as np
+    pass
 else:
-    import numpy as np
+    pass
 
 
 
@@ -23,7 +28,7 @@ class OptimizedVectorData(object):
     max_index          : int = 1
     values_index_start : int = 2
     
-    # Полежение векторов
+    # Положение векторов
     axis_X : int = 0
     axis_Y : int = 1
 
@@ -53,7 +58,7 @@ class OptimizedVectorData(object):
             raise TypeError("Передан неверный тип параметра vec_candidates_size")
         if vec_candidates_size <= 0:
             raise ValueError("Значение размера vec_candidates_size не может быть меньше либо равно 0")
-            
+
 
         self._vec_size : int = vec_size
         """Размер хранимого вектора"""
@@ -72,9 +77,9 @@ class OptimizedVectorData(object):
 
 
 
-    def iter_vectors(self) -> np.array:
+    def iterVectors(self) -> np.array:
         """
-        iter_vectors
+        iterVectors
         ---
         Итератор входящих вектров, без лимитирующих векторов
         """
@@ -83,22 +88,6 @@ class OptimizedVectorData(object):
             np.size(self._vec[OptimizedVectorData.axis_Y]) - OptimizedVectorData.values_index_start):
             yield self._vec[:, column + OptimizedVectorData.values_index_start]
 
-
-
-    @property
-    def vec(self) -> np.array:
-        """
-        Возврат вектора одних только значений.
-        
-        Производит отсечение столбцов значений максимума и минимума доступного для параметра
-        """
-        return self._vec[:, OptimizedVectorData.values_index_start]
-
-
-    @vec.setter
-    def vec(self, vec) -> None:
-        # TODO: Добавить проверки данных для присвоения
-        self._vec[:, OptimizedVectorData.values_index_start] = vec
 
 
     def setLimitation(self, 
@@ -125,17 +114,21 @@ class OptimizedVectorData(object):
         self._vec[index][OptimizedVectorData.max_index] = loc_max
 
 
-    def setVectorRandVal(self, min_val : float, max_val : float) -> None:
+
+    def setVectorsRandVal(self, min_val : float, max_val : float) -> None:
         """
-        setVectorRandVal
+        setVectorsRandVal
         ---
-        Получение начального вектора с величинами по нормальному распределению
+        Получение начальных векторов с величинами по нормальному распределению
         """
-        self.vec =  np.random.uniform(
-            low  = min_val, 
-            high = max_val, 
-            size = np.shape(self.vec)
-            )
+        vec : np.array
+        for vec in self.iterVectors():
+            vec[:] = np.random.uniform(
+                low  = min_val, 
+                high = max_val, 
+                size = self._vec_size
+                ).copy()
+
 
 
     def setVectorRandValByLimits(self) -> None:
@@ -145,7 +138,8 @@ class OptimizedVectorData(object):
         TODO: Получение начального вектора с величинами в диапазонах допустимого минимума и максимума 
         по нормальному распределению 
         """
-        pass
+        raise NotImplementedError
+
 
 
     def __str__(self):
@@ -168,6 +162,7 @@ class BaseOptimizer(object):
                  to_model_vec_size    : int,
                  from_model_vec_size  : int,
                  iter_limit           : int,
+                 main_value_index     : int = 0
                  ) -> None:
         """
         __init__
@@ -178,6 +173,7 @@ class BaseOptimizer(object):
             to_model_vec_size    : int - Размерность вектора принимаемого целевой моделью оптимизации
             from_model_vec_size  : int - Размерность вектора получаемого от целевой модели оптимизации
             iter_limit           : int - Ограничение по количеству доступных итераций работы алгоритма
+            main_value_index     : int - Индекс целевого оптимизируемого параметра
         """
 
         # Параметры генератора, доступные для перенастройки
@@ -189,24 +185,27 @@ class BaseOptimizer(object):
         """Размер выходного вектора параметров"""
         self._iteration_limitation : int = iter_limit
         """Ограничение по количеству итераций алгоритма"""
+        self._main_value_index     : int = main_value_index
+        """Индекс целевого оптимизируемого параметра"""
+
+        self._init_param()
 
         # Внутренние общие параметры генератора
         # ==========================================================================================
+        # Не используются
 
-        self._to_opt_model_data : OptimizedVectorData = OptimizedVectorData(
-            size = self._to_model_vec_size
-            )
-        """Выходной вектор, отправляемый в модель оптимизации"""
-        
-        self._from_model_data : OptimizedVectorData = OptimizedVectorData(
-            size = self._from_model_vec_size
-            )
-        """Входной вектор, получаемый от модели оптимизации"""
-        
-        self._objective_function_value_from_model : float = 0.0
-        """Значение целевой функции"""
-        
-        self._init_param()
+
+
+    def __setattr__(self, key, value):
+        """
+        __setattr__
+        ---
+        Проверка корректности внесения атрибутов
+        """
+        # TODO: Добавить проверки атрибутов
+        if key == "_to_model_vec_size":
+            pass
+        super().__setattr__(key, value)
 
 
 
@@ -218,6 +217,22 @@ class BaseOptimizer(object):
         NOTE: Вынесено отдельно для упрощения переопределения функционала без необходимости 
               изменения коструктора базового класса
         """
+        self._vec_candidates_size : int = 1
+        """Число векторов кандидатов для получения решения. По умолчанию 1. Изменяется в зависимости
+        от реализации."""
+
+        self._to_opt_model_data : OptimizedVectorData = OptimizedVectorData(
+            vec_size            = self._to_model_vec_size,
+            vec_candidates_size = self._vec_candidates_size
+            )
+        """Выходной вектор, отправляемый в модель оптимизации"""
+        
+        self._from_model_data : OptimizedVectorData = OptimizedVectorData(
+            vec_size            = self._from_model_vec_size,
+            vec_candidates_size = self._vec_candidates_size
+            )
+        """Входной вектор, получаемый от модели оптимизации"""
+
         self._init_to_model_vec()
 
 
@@ -230,7 +245,7 @@ class BaseOptimizer(object):
         
         Выполняет наполнение выходного массива.
         """
-        self._to_opt_model_data.setVectorRandVal(0.0, 1.0)
+        self._to_opt_model_data.setVectorsRandVal(0.0, 1.0)
 
 
 
@@ -278,77 +293,23 @@ class BaseOptimizer(object):
 
 
 
-    def AlgIter(self):
+    def modelOptimize(self, func : Callable[[np.array], np.array]) -> None:
         """
-        AlgIter
+        modelOptimize
         ---
-        Главный итератор решателя
+        Запуск оптимизации через передачу функции черного ящика
         
-        На каждой итерации вызова выполняется возврат указателей на приведенные векторы типа 
-        np.array. Для изменений из вне доступны только вектора _from_opt_model_vec и 
-        _objective_function_value
-        
-        Возврат:
-            _to_model_vec            : np.array - Вектор для отправки в модель оптимизации
-            _from_model_vec          : np.array - Вектор полученный от модели оптимзации
-            _from_model_obj_func_val : np.array - Значение целевой функции от модели оптимизации
+        TODO: Выполнить проверку пригодности функции, соразмерности возвращаемых векторов или 
+              добавить автоопределение размености векторов
         """
-        # TODO: Пересмотреть логику работы итератора, а сейчас запрет использования
-        raise NotImplementedError
-        
-        for _ in range(self.iteration_limitation):
-            yield (self._to_opt_model_vec.copy(), self._from_opt_model_vec, self._objective_function_value)
+        for _ in range(self._iteration_limitation):
+            for to_vec, from_vec in zip(
+                self._to_opt_model_data.iterVectors(), 
+                self._from_model_data.iterVectors()
+                ):
+                from_vec[:] = func(to_vec)
             self._main_calc_func()
 
-
-
-    @property
-    def vecToModel(self) -> np.array:
-        """Предоставляемый вектор для отправки в модель"""
-        self._main_calc_func()
-        return self._to_opt_model_data.vec.copy()
-
-
-    @property
-    def vecFromModel(self) -> None:
-        return self._from_model_data.vec.copy()
-        # raise AttributeError("Чтение атрибута не допускается")
-
-
-    @vecFromModel.setter
-    def vecFromModel(self, new_value : np.array) -> None:
-        """Установка значений, полученных от модели"""
-        
-        if new_value is None:
-            return
-        if not isinstance(new_value, np.ndarray):
-            raise TypeError("Неврный тип параметра для присовения атрибуту vecFromModel")
-        if self._from_model_data.vec.dtype != new_value.dtype:
-            raise TypeError("Неверный тип элементов присваиваемого вектора")
-        if self._from_model_data.vec.shape != new_value.shape:
-            raise TypeError("Неверная размерность присваемого вектора")
-
-        self._from_model_data.vec = new_value.copy()
-
-
-    @property
-    def objFuncValue(self) -> float | None:
-        """
-        Чтиение установленного значения целевой функции
-        """
-        return self._objective_function_value_from_model
-
-
-    @objFuncValue.setter
-    def objFuncValue(self, new_val : float | int | None) -> None:
-        """
-        Установка занчения целевой функции от модели
-        """
-        if new_val is None:
-            return
-        if not isinstance(new_val, float) and not isinstance(new_val, int):
-            raise TypeError("Присваивается неверный тип атрибуту _objective_function_value_from_model")
-        self._objective_function_value_from_model = float(new_val)
 
 
     def getResult(self):
@@ -363,18 +324,24 @@ class BaseOptimizer(object):
 
 # Отладка функционала базового генератора
 if __name__ == "__main__":
-    test_OptimizedVectorData = OptimizedVectorData(vec_size = 12, vec_candidates_size = 3)
-    print(test_OptimizedVectorData)
+    # test_OptimizedVectorData = OptimizedVectorData(vec_size = 12, vec_candidates_size = 3)
+    # print(test_OptimizedVectorData)
 
-    for item in test_OptimizedVectorData.iter_vectors():
-        print(item)
+    # for item in test_OptimizedVectorData.iterVectors():
+    #     print(item)
+        
+    # test_OptimizedVectorData.setVectorsRandVal(0.0, 1.0)
+    # print(test_OptimizedVectorData)
 
+    # for item in test_OptimizedVectorData.iterVectors():
+    #     print(item)
 
-    # test_BaseOptimizer = BaseOptimizer(
-    #     to_model_vec_size    = 5,5
-    #     from_model_vec_size  = 4,
-    #     iter_limit           = 100,
-    # )
+    test_BaseOptimizer = BaseOptimizer(
+        to_model_vec_size    = 5,
+        from_model_vec_size  = 4,
+        iter_limit           = 100,
+    )
+    test_BaseOptimizer.modelOptimize(func = lambda: print(""))
     # print(test_BaseOptimizer._to_opt_model_data.vec)
     # print(test_BaseOptimizer._to_opt_model_data)
     # print(test_BaseOptimizer.vecToModel)

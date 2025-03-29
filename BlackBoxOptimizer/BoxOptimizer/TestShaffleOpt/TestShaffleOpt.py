@@ -34,6 +34,6 @@ class TestShaffleOpt(BaseOptimizer):
         Простейший случай главной работы - перемешивание элементов массива и прибавление максимума 
         от оптимизуемой модели
         """
-        self._to_opt_model_data.vec = self._to_opt_model_data.vec + np.max(self._from_model_data.vec)
-        np.random.shuffle(self._to_opt_model_data.vec)
+        for to_vec, from_vec in zip(self._to_opt_model_data.iterVectors(), self._from_model_data.iterVectors()):
+            to_vec[:] = to_vec[:] + np.min(from_vec) / 10
 
