@@ -32,7 +32,7 @@ class TestStepOpt(BaseOptimizer):
 
 
 
-    def _main_calc_func(self):
+    def _main_calc_func(self, func):
         """
         _main_calc_func
         ---
@@ -45,7 +45,22 @@ class TestStepOpt(BaseOptimizer):
             history_to.append(to_vec.copy())
 
             """Ниже основной цикл работы модели оптимизации"""
-            to_vec[:] = to_vec[:] + self.step
+            point = to_vec.copy() # Текущая точка (вектор), будем двигаться последовательно по каждой координате
+            for i in range(len(point)): # Генерация для каждого парамета 3 кандидатов - ничего не измменилось, прибавить шаг, отнять шаг
+                candidate_low = point.copy()
+                candidate_low[i] -= self.step
+
+                candidate_stay = point.copy()
+
+                candidate_high = point.copy()
+                candidate_high[i] += self.step
+
+                candidates = [candidate_low, candidate_stay, candidate_high]
+                '''Вычисление внешней модели для каждого кандидата, по умолчанию сделано что целевая функция - первый элемент массива'''
+                target_values = [func(candidate_low)[0], func(candidate_stay)[0], func(candidate_high)[0]]
+                point = candidates[np.argmin(target_values)].copy() # Обновляем точку, записываем в неё лучшего из кандидатов
+
+            to_vec[:] = point.copy() # Записываем итоговую точку
 
             """Ниже Данные для записи в историю итоги из внешней модели"""
             history_from.append(from_vec.copy())

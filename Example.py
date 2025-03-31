@@ -5,36 +5,37 @@ import numpy as np
 from typing import Tuple
 
 
+class BaseExternalModel:
+    def __init__(self):
+        self._call_count = 0
 
-def test_object_function(values : np.array) -> Tuple[np.array, float]:
-    """
-    Тестовая целевая функция с выдачей какого-то вектора
-    Возврат:
-        - Тот самый какой-то вектор
-        - Значение целевой функции
-    """
-    return (values.copy()[0:10] , np.sum(values.copy().sum()) * 4)
+    def _increment_call_count(self):
+        """Увеличивает счетчик вызовов метода evaluate."""
+        self._call_count += 1
+
+    def evaluate(self, to_vec: np.ndarray, *args, **kwargs):
+        """Метод-заглушка для переопределения в наследниках."""
+        raise NotImplementedError("Метод evaluate должен быть переопределен в подклассе")
+
+    def _track_evaluate_calls(func):
+        """Декоратор для отслеживания числа вызовов evaluate."""
+        def wrapper(self, vec):
+            self._increment_call_count()
+            return func(self, vec)
+        return wrapper
+
+    def get_call_count(self):
+        return self._call_count
 
 
-def test_object_function_variant_B(values : np.array) -> np.array:
-    """
-    Тестовая целевая функция с выдачей какого-то вектора
-    Возврат:
-        - Тот самый какой-то вектор
-    """
-    loc_vec = values.copy()[0:3]
-    loc_vec[0] = np.sum(values.copy().sum()) * 4
-    return loc_vec.copy()
+class ModelMinSquareSum(BaseExternalModel):
+    def __init__(self, target: np.ndarray):
+        super().__init__()
+        self.target = target
 
-class external_model:
-    def __init__(self, param):
-        self.parameter = param
-        self.usage_count = 0
-
-    def evaluate(self, to_vec):
-        self.usage_count += 1
-        self.parameter += 1
-        return np.array([self.parameter, max(to_vec)])
+    @BaseExternalModel._track_evaluate_calls
+    def evaluate(self, to_vec, *args, **kwargs):
+        return np.array([np.sum((to_vec - self.target) ** 2), max(to_vec)])
 
 
 
@@ -43,25 +44,31 @@ if __name__ == "__main__":
     # Создать класс оптимизатора
     opt = Optimizer(
         optCls              = TestStepOpt,
-        seed                = 1546,
+        seed                = 1546, # TODO: Проверить, точно ли работает. Сейчас выдаёт разные значения при одном seed
         to_model_vec_size   = 3,
         from_model_vec_size = 2,
-        iter_limit          = 3
+        iter_limit          = 10
         )
 
     # Пример конфигурирования для конктретной реализации оптимизирущего класса
-    opt.configure(step = 1)
+    opt.configure(step = 0.1)
 
-    model = external_model(5)
+    target_point = np.array([0, 0.5, -0.2]) # Целевая точка, которую хотим увидеть, используется для отладки
+    model = ModelMinSquareSum(target_point)
 
     # Запуск оптимизации
     opt.modelOptimize(func = model.evaluate)
     currentOptimizer = opt.getOptimizer()
+    print('История изменения рабочей точки')
     print(*currentOptimizer.history_to_opt_model_data)
     print(20*'=')
+    print('История вычисления внешней моделью черным ящиком')
     print(currentOptimizer.history_from_model_data)
     print(20 * '=')
-    print(model.usage_count)
+    print(f'Число вызовов внешней модели - {model.get_call_count()}')
     print(20 * '=')
+    print('Результат')
     print(currentOptimizer.getResult())
+
+
 

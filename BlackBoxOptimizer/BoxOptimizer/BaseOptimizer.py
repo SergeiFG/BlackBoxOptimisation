@@ -271,7 +271,7 @@ class BaseOptimizer(object):
 
 
 
-    def _main_calc_func(self) -> None:
+    def _main_calc_func(self, func) -> None:
         """
         _main_calc_func
         ---
@@ -308,7 +308,7 @@ class BaseOptimizer(object):
                 self._from_model_data.iterVectors()
                 ):
                 from_vec[:] = func(to_vec)
-            self._main_calc_func()
+            self._main_calc_func(func)
 
 
 
