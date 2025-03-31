@@ -50,7 +50,7 @@ if __name__ == "__main__":
         )
 
     # Пример конфигурирования для конктретной реализации оптимизирущего класса
-    opt.configure(step = 0.5)
+    opt.configure(step = 1)
 
     model = external_model(5)
 

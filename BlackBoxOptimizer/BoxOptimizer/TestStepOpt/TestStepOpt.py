@@ -38,10 +38,20 @@ class TestStepOpt(BaseOptimizer):
         ---
         Координатный поиск с фиксированным шагом
         """
+        history_to = []
+        history_from = []
         for to_vec, from_vec in zip(self._to_opt_model_data.iterVectors(), self._from_model_data.iterVectors()):
-            self.history_to_opt_model_data.append(to_vec.copy())
+            """Ниже Данные для записи в историю точка в начале каждой итерации"""
+            history_to.append(to_vec.copy())
 
+            """Ниже основной цикл работы модели оптимизации"""
             to_vec[:] = to_vec[:] + self.step
 
-            self.history_from_model_data.append(from_vec.copy())
+            """Ниже Данные для записи в историю итоги из внешней модели"""
+            history_from.append(from_vec.copy())
 
+        self.history_to_opt_model_data.append(history_to.copy())
+        self.history_from_model_data.append(history_from.copy())
+
+    def getResult(self):
+        return self._to_opt_model_data.iterVectors()
