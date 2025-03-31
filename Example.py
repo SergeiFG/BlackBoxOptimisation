@@ -62,4 +62,6 @@ if __name__ == "__main__":
     print(currentOptimizer.history_from_model_data)
     print(20 * '=')
     print(model.usage_count)
+    print(20 * '=')
+    print(currentOptimizer.getResult())
 

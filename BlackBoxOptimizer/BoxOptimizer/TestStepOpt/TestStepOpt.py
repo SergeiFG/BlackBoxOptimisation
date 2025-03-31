@@ -54,4 +54,5 @@ class TestStepOpt(BaseOptimizer):
         self.history_from_model_data.append(history_from.copy())
 
     def getResult(self):
-        return self._to_opt_model_data.iterVectors()
+
+        return list(self._to_opt_model_data.iterVectors())
