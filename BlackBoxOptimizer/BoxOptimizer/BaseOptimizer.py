@@ -141,6 +141,15 @@ class OptimizedVectorData(object):
         raise NotImplementedError
 
 
+    def getInLimitsMatrix(self) -> np.array:
+        """
+        getInLimitsMatrix
+        ---
+        Получение бинарной матрицы признаков принадлежности параметра вектора диапазону
+        минимум-максимум
+        """
+        loc_matrix = np.array()
+
 
     def __str__(self):
         """
@@ -312,7 +321,7 @@ class BaseOptimizer(object):
 
 
 
-    def getResult(self):
+    def getResult(self) -> str:
         """
         getResult
         ---
@@ -324,6 +333,14 @@ class BaseOptimizer(object):
 
 # Отладка функционала базового генератора
 if __name__ == "__main__":
+    loc_vec = np.array([[1, 2, 3, 4]], dtype = float)
+    print(loc_vec)
+    
+    # loc_vec = np.append(loc_vec, [8, 9, 10])
+    # loc_vec = np.extend(loc_vec, [[8, 9, 10, 114]], axis = 1)
+    print(loc_vec)
+    
+    
     # test_OptimizedVectorData = OptimizedVectorData(vec_size = 12, vec_candidates_size = 3)
     # print(test_OptimizedVectorData)
 
@@ -336,12 +353,12 @@ if __name__ == "__main__":
     # for item in test_OptimizedVectorData.iterVectors():
     #     print(item)
 
-    test_BaseOptimizer = BaseOptimizer(
-        to_model_vec_size    = 5,
-        from_model_vec_size  = 4,
-        iter_limit           = 100,
-    )
-    test_BaseOptimizer.modelOptimize(func = lambda: print(""))
+    # test_BaseOptimizer = BaseOptimizer(
+    #     to_model_vec_size    = 5,
+    #     from_model_vec_size  = 4,
+    #     iter_limit           = 100,
+    # )
+    # test_BaseOptimizer.modelOptimize(func = lambda: print(""))
     # print(test_BaseOptimizer._to_opt_model_data.vec)
     # print(test_BaseOptimizer._to_opt_model_data)
     # print(test_BaseOptimizer.vecToModel)

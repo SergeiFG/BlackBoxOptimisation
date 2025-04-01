@@ -59,4 +59,13 @@ class Optimizer(object):
         Запуск оптимизации через передачу функции черного ящика
         """
         self._CurrentOptimizerObject.modelOptimize(func)
+        
+        
+    def getResult(self) -> str:
+        """
+        getResult
+        ---
+        Возврат результата работы модуля оптимизации черного ящика
+        """
+        self._CurrentOptimizerObject.getResult()
 
