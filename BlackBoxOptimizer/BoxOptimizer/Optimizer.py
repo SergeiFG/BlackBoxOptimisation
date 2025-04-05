@@ -6,7 +6,7 @@ More details.
 from .BaseOptimizer import BaseOptimizer
 
 import numpy as np
-from typing import Callable
+from typing import Callable, Literal
 
 
 
@@ -46,9 +46,15 @@ class Optimizer(object):
         ---
         Метод обновления конфигурации
         
+        Выполняет конфигурирование параметров работы алгоритмов при наличии необходимых
         
+        Пример использования:
+        
+        >>> import SpecificOptimizer
+        ... optimizer = SpecificOptimizer()
+        ... optimizer.configure(some_parameter_A = some_value_A, some_parameter_B = some_value_B)
         """
-        self._CurrentOptimizerObject.configure(**kwargs)
+        return self._CurrentOptimizerObject.configure(**kwargs)
 
 
 
@@ -58,14 +64,32 @@ class Optimizer(object):
         ---
         Запуск оптимизации через передачу функции черного ящика
         """
-        self._CurrentOptimizerObject.modelOptimize(func)
-        
-        
-    def getResult(self) -> str:
+        return self._CurrentOptimizerObject.modelOptimize(func)
+
+
+
+    def getResult(self) -> np.ndarray:
         """
         getResult
         ---
         Возврат результата работы модуля оптимизации черного ящика
         """
-        self._CurrentOptimizerObject.getResult()
+        return self._CurrentOptimizerObject.getResult()
 
+
+
+    def getHistoricalData(self, key : None | Literal["vec_to_model", "vec_from_model", "obj_val"] = None) -> None | list:
+        """
+        getHistoricalData
+        ---
+        Получение исторических данных, собранных в результате работы алгоритма
+        
+        "vec_to_model" - Получение истории векторов, отправляемых в оптимизационную модель на протя-
+                         жении всех заданных итераций работы
+        "vec_from_model" - Получение истории векторов, получаемых от оптимизационной модели на протя-
+                           жении всех заданных итераций работы
+        "obj_val" - Зафиксированные значения целевой функции
+        """
+        return self._CurrentOptimizerObject.getHistoricalData(key)
+    
+    

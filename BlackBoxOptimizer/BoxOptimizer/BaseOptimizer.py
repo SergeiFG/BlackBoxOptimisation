@@ -9,7 +9,7 @@ BaseOptimizer
 """
 
 # Подключаемые модули независимой конфигурации
-from typing import TypeVar, Callable, Tuple
+from typing import TypeVar, Callable, Tuple, Literal
 import numpy as np
 
 
@@ -75,6 +75,9 @@ class OptimizedVectorData(object):
         self._vec[:, OptimizedVectorData.max_index] =  np.inf
         """Хранимый вектор значений, инициализируемый нулями, хранит значение минимума и максимума"""
 
+    @property
+    def vecs(self) -> np.ndarray:
+        return np.copy(self._vec[:, OptimizedVectorData.values_index_start:])
 
 
     def iterVectors(self) -> np.array:
@@ -201,7 +204,8 @@ class BaseOptimizer(object):
 
         # Внутренние общие параметры генератора
         # ==========================================================================================
-        # Не используются
+        self._historical_data_container : list = []
+        """Лист хранения исторических данных выполнения алгоритмов оптимизации"""
 
 
 
@@ -215,6 +219,21 @@ class BaseOptimizer(object):
         if key == "_to_model_vec_size":
             pass
         super().__setattr__(key, value)
+
+
+
+    def __getattribute__(self, name):
+        """
+        __getattribute__
+        ---
+        Обработка доступа к атрибутам
+        """
+        
+        # Доступ к методу _main_calc_func прописано добавление истории при каждом вызове
+        if name == "_main_calc_func":
+            self._collectIterHistoryData()
+        
+        return super().__getattribute__(name)
 
 
 
@@ -321,24 +340,78 @@ class BaseOptimizer(object):
 
 
 
-    def getResult(self) -> str:
+    def _collectIterHistoryData(self) -> None:
+        """
+        _collectIterHistoryData
+        ---
+        
+        Внутренний метод сохранения информации о текущей итерации
+        """
+        loc_dict_item : dict = {}
+        loc_dict_item["vec_to_model"]   = np.copy(self._to_opt_model_data.vecs)
+        loc_dict_item["vec_from_model"] = np.copy(self._from_model_data.vecs)
+        loc_dict_item["obj_val"]   = np.copy(self._from_model_data.vecs[self._main_value_index, :])
+        self._historical_data_container.append(loc_dict_item)
+
+
+
+    def getHistoricalData(self, key : None | Literal["vec_to_model", "vec_from_model", "obj_val"] = None) -> None | list:
+        """
+        getHistoricalData
+        ---
+        Получение исторических данных, собранных в результате работы алгоритма
+        """
+        if key is None:
+            return self._historical_data_container
+        
+        if key not in ["vec_to_model", "vec_from_model", "obj_val"]:
+            return None
+        
+        loc_output_list : list = []
+        
+        for item in self._historical_data_container:
+            loc_output_list.append(item[key])
+        return loc_output_list
+
+
+
+
+    def getResult(self) -> np.ndarray:
         """
         getResult
         ---
         Метод получения результата работы выбранного алгоритма
+        
+        Выполняет возврат последнего сохраненного заначения, полученного путем применения алгоритма
+        оптимизации.
         """
-        raise NotImplementedError
+        return self._to_opt_model_data.vecs
+
+
+
+
+
+
 
 
 
 # Отладка функционала базового генератора
 if __name__ == "__main__":
-    loc_vec = np.array([[1, 2, 3, 4]], dtype = float)
-    print(loc_vec)
+    # test_BaseOptimizer = BaseOptimizer(
+    #     to_model_vec_size    = 5,
+    #     from_model_vec_size  = 4,
+    #     iter_limit           = 100,
+    # )
+    # print(test_BaseOptimizer._to_opt_model_data)
+    # print(test_BaseOptimizer.getResult())
+    
+    
+    # loc_vec = np.array([[1, 2, 3, 4]], dtype = float)
+    # print(loc_vec)
     
     # loc_vec = np.append(loc_vec, [8, 9, 10])
     # loc_vec = np.extend(loc_vec, [[8, 9, 10, 114]], axis = 1)
-    print(loc_vec)
+    # print(loc_vec)
     
     
     # test_OptimizedVectorData = OptimizedVectorData(vec_size = 12, vec_candidates_size = 3)
