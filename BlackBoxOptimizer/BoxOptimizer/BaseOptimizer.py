@@ -11,13 +11,17 @@ BaseOptimizer
 # Подключаемые модули независимой конфигурации
 from typing import TypeVar, Callable, Tuple, Literal
 import numpy as np
-
+import time
 
 # Подключаемые модули зависимой конфигурации
 if __name__ == "__main__":
     pass
 else:
     pass
+
+
+DEBUG_THE_BIGGEST_ONE = 999999999
+"""Самое большое число. Пока в дебаге"""
 
 
 
@@ -35,6 +39,7 @@ class OptimizedVectorData(object):
     def __init__(
         self,
         vec_size : int,
+        seed     : int,
         vec_candidates_size : int = 1
         ) -> None:
         """
@@ -58,6 +63,10 @@ class OptimizedVectorData(object):
             raise TypeError("Передан неверный тип параметра vec_candidates_size")
         if vec_candidates_size <= 0:
             raise ValueError("Значение размера vec_candidates_size не может быть меньше либо равно 0")
+
+
+        self._seed : int = seed
+        """Используемая база генератора для псевдослучайных последовательностей"""
 
 
         self._vec_size : int = vec_size
@@ -124,6 +133,7 @@ class OptimizedVectorData(object):
         ---
         Получение начальных векторов с величинами по нормальному распределению
         """
+        np.random.seed(int(self._seed))
         vec : np.array
         for vec in self.iterVectors():
             vec[:] = np.random.uniform(
@@ -141,7 +151,21 @@ class OptimizedVectorData(object):
         TODO: Получение начального вектора с величинами в диапазонах допустимого минимума и максимума 
         по нормальному распределению 
         """
-        raise NotImplementedError
+        np.random.seed(int(self._seed))
+        
+        for vec, min, max in \
+            zip(
+                self._vec[:, OptimizedVectorData.values_index_start:],
+                self._vec[:, OptimizedVectorData.min_index],
+                self._vec[:, OptimizedVectorData.max_index],
+                ):
+            vec[:] = np.random.uniform(
+                low  = min if min != -np.inf else -DEBUG_THE_BIGGEST_ONE, 
+                high = max if max !=  np.inf else  DEBUG_THE_BIGGEST_ONE, 
+                size = np.size(vec)
+                ).copy()
+
+
 
 
     def getInLimitsMatrix(self) -> np.array:
@@ -151,7 +175,17 @@ class OptimizedVectorData(object):
         Получение бинарной матрицы признаков принадлежности параметра вектора диапазону
         минимум-максимум
         """
-        loc_matrix = np.array()
+        loc_matrix = np.array(
+            np.zeros(
+                shape = np.shape(
+                    self._vec[:,OptimizedVectorData.values_index_start:])), dtype = bool)
+
+        for vec, bool_vec in zip(self._vec, loc_matrix):
+            for vec_item, bool_item_num in zip(vec[OptimizedVectorData.values_index_start:], range(np.size(bool_vec))):
+                bool_vec[bool_item_num] = \
+                    (vec_item > vec[OptimizedVectorData.min_index] and vec_item < vec[OptimizedVectorData.max_index])
+        return loc_matrix
+
 
 
     def __str__(self):
@@ -174,6 +208,7 @@ class BaseOptimizer(object):
                  to_model_vec_size    : int,
                  from_model_vec_size  : int,
                  iter_limit           : int,
+                 seed                 : int = None,
                  main_value_index     : int = 0
                  ) -> None:
         """
@@ -199,6 +234,8 @@ class BaseOptimizer(object):
         """Ограничение по количеству итераций алгоритма"""
         self._main_value_index     : int = main_value_index
         """Индекс целевого оптимизируемого параметра"""
+        self._seed                 : int = time.time() if seed is None else seed
+        """Используемая база генератора для псевдослучайных последовательностей"""
 
         self._init_param()
 
@@ -251,13 +288,15 @@ class BaseOptimizer(object):
 
         self._to_opt_model_data : OptimizedVectorData = OptimizedVectorData(
             vec_size            = self._to_model_vec_size,
-            vec_candidates_size = self._vec_candidates_size
+            vec_candidates_size = self._vec_candidates_size,
+            seed                = self._seed
             )
         """Выходной вектор, отправляемый в модель оптимизации"""
         
         self._from_model_data : OptimizedVectorData = OptimizedVectorData(
             vec_size            = self._from_model_vec_size,
-            vec_candidates_size = self._vec_candidates_size
+            vec_candidates_size = self._vec_candidates_size,
+            seed                = self._seed
             )
         """Входной вектор, получаемый от модели оптимизации"""
 
@@ -375,7 +414,6 @@ class BaseOptimizer(object):
 
 
 
-
     def getResult(self) -> np.ndarray:
         """
         getResult
@@ -389,6 +427,23 @@ class BaseOptimizer(object):
 
 
 
+    def setVecItemLimit(self, 
+                        index : int, 
+                        vec_dir : Literal["to_model", "from_model"] = "to_model",
+                        min : None | float = None,
+                        max : None | float = None) -> None:
+        """
+        setVecItemLimit
+        ---
+        
+        Установка ограничения для параметра внутри вектора
+        """
+        if vec_dir == "to_model":
+            self._to_opt_model_data.setLimitation(index = index, min = min, max = max)
+        elif vec_dir == "from_model":
+            self._from_model_data.setLimitation(index = index, min = min, max = max)
+        else:
+            ...
 
 
 
@@ -397,6 +452,19 @@ class BaseOptimizer(object):
 
 # Отладка функционала базового генератора
 if __name__ == "__main__":
+    test_OptimizedVectorData = OptimizedVectorData(vec_size = 12, vec_candidates_size = 3, seed = time.time())
+    # test_OptimizedVectorData.setVectorsRandVal(0.0, 1.0)
+    test_OptimizedVectorData.setLimitation(4, 0.5, 1)
+    test_OptimizedVectorData.setLimitation(5, 0.5, 1)
+    test_OptimizedVectorData.setLimitation(6, 0.5, 1)
+    test_OptimizedVectorData.setVectorRandValByLimits()
+    for item in test_OptimizedVectorData.iterVectors():
+        print(item)
+        
+    print(test_OptimizedVectorData.getInLimitsMatrix())
+    
+    
+    
     # test_BaseOptimizer = BaseOptimizer(
     #     to_model_vec_size    = 5,
     #     from_model_vec_size  = 4,

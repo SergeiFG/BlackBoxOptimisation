@@ -93,3 +93,23 @@ class Optimizer(object):
         return self._CurrentOptimizerObject.getHistoricalData(key)
     
     
+    def setVecItemLimit(self, 
+                        index : int, 
+                        vec_dir : Literal["to_model", "from_model"] = "to_model",
+                        min : None | float = None,
+                        max : None | float = None) -> None:
+        """
+        setVecItemLimit
+        ---
+        
+        Установка ограничения для параметра внутри вектора
+        
+        Аргументы:
+            index   : int - Индекс ограничиваемого элемента внутри вектора
+            min     : None | float - Устанавливаемый минимум
+            max     : None | float - Устанавливаемый максимум
+            vec_dir : Literal["to_model", "from_model"] - Выбор вектора направления передачи параметров
+        """
+        return self._CurrentOptimizerObject.setVecItemLimit(
+            index = index, vec_dir = vec_dir, min = min, max = max)
+        
