@@ -1,0 +1,6 @@
+- Интерфейс пересобран под python 3.13 и ниже
+- Актуальное колесо в Pynomad.dist
+- python -m Pynomad.build
+- ~~pip install pynomad~~ НЕ ИСПОЛЬЗОВАТЬ, крашнет колесо
+- Не пересобирать, в билде не все бинарники
+- cpp errors -> ignore
