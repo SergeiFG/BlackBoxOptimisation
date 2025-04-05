@@ -4,7 +4,7 @@ main.py
 Файл отладки библиотеки
 
 NOTE:
->>> python -m pipreqs.pipreqs .
+# >>> python -m pipreqs.pipreqs .
 
 
 """

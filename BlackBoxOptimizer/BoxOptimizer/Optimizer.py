@@ -60,3 +60,11 @@ class Optimizer(object):
         """
         self._CurrentOptimizerObject.modelOptimize(func)
 
+    def getOptimizer(self):
+        """
+        getOptimizer
+        ---
+        Возврат экземпляр модели оптимизации, с которой он работал
+        Необходимо для отладки, получения метрик, тестирования
+        """
+        return self._CurrentOptimizerObject
