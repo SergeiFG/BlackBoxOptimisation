@@ -217,7 +217,7 @@ class BaseOptimizer(object):
         NOTE: Вынесено отдельно для упрощения переопределения функционала без необходимости 
               изменения коструктора базового класса
         """
-        self._vec_candidates_size : int = 2
+        self._vec_candidates_size : int = 1
         """Число векторов кандидатов для получения решения. По умолчанию 1. Изменяется в зависимости
         от реализации."""
 
@@ -271,7 +271,7 @@ class BaseOptimizer(object):
 
 
 
-    def _main_calc_func(self, func) -> None:
+    def _main_calc_func(self) -> None:
         """
         _main_calc_func
         ---
@@ -308,7 +308,7 @@ class BaseOptimizer(object):
                 self._from_model_data.iterVectors()
                 ):
                 from_vec[:] = func(to_vec)
-            self._main_calc_func(func)
+            self._main_calc_func()
 
 
 

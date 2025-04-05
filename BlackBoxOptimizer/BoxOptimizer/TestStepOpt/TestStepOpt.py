@@ -7,6 +7,7 @@
 from ..BaseOptimizer import BaseOptimizer
 
 import numpy as np
+from typing import Callable
 
 class TestStepOpt(BaseOptimizer):
     """
@@ -30,7 +31,16 @@ class TestStepOpt(BaseOptimizer):
         self.history_to_opt_model_data = []
         self.history_from_model_data = []
 
-
+    def modelOptimize(self, func: Callable[[np.array], np.array]) -> None:
+        """
+        modelOptimize
+        ---
+        Запуск оптимизации через передачу функции черного ящика
+        Реализация при необходимости вызова внешней модели внутри итерации оптимизации
+        Если внутри итерации оптимизации нет вызова внешней модели, оставить базовую реализацию
+        """
+        for _ in range(self._iteration_limitation):
+            self._main_calc_func(func)
 
     def _main_calc_func(self, func):
         """
@@ -41,10 +51,6 @@ class TestStepOpt(BaseOptimizer):
         history_to = []
         history_from = []
         for to_vec, from_vec in zip(self._to_opt_model_data.iterVectors(), self._from_model_data.iterVectors()):
-            """Ниже Данные для записи в историю точка в начале каждой итерации"""
-            history_to.append(to_vec.copy())
-
-            """Ниже основной цикл работы модели оптимизации"""
             point = to_vec.copy() # Текущая точка (вектор), будем двигаться последовательно по каждой координате
             for i in range(len(point)): # Генерация для каждого парамета 3 кандидатов - ничего не измменилось, прибавить шаг, отнять шаг
                 candidate_low = point.copy()
@@ -56,18 +62,21 @@ class TestStepOpt(BaseOptimizer):
                 candidate_high[i] += self.step
 
                 candidates = [candidate_low, candidate_stay, candidate_high]
-                '''Вычисление внешней модели для каждого кандидата, по умолчанию сделано что целевая функция - первый элемент массива'''
                 target_values = [func(candidate_low)[0], func(candidate_stay)[0], func(candidate_high)[0]]
+                '''Вычисление внешней модели для каждого кандидата, по умолчанию сделано что целевая функция - первый элемент массива'''
                 point = candidates[np.argmin(target_values)].copy() # Обновляем точку, записываем в неё лучшего из кандидатов
+                """Основной цикл работы модели оптимизации"""
 
             to_vec[:] = point.copy() # Записываем итоговую точку
+            history_to.append(to_vec.copy())
+            """Данные для записи в историю новая рабочая точка (MV) после итерации"""
 
-            """Ниже Данные для записи в историю итоги из внешней модели"""
+            from_vec = func(to_vec)
             history_from.append(from_vec.copy())
+            """Данные для записи в историю итоги из внешней модели (CV) после итерации"""
 
         self.history_to_opt_model_data.append(history_to.copy())
         self.history_from_model_data.append(history_from.copy())
 
     def getResult(self):
-
         return list(self._to_opt_model_data.iterVectors())

@@ -47,11 +47,11 @@ if __name__ == "__main__":
         seed                = 1546, # TODO: Проверить, точно ли работает. Сейчас выдаёт разные значения при одном seed
         to_model_vec_size   = 3,
         from_model_vec_size = 2,
-        iter_limit          = 10
+        iter_limit          = 100
         )
 
     # Пример конфигурирования для конктретной реализации оптимизирущего класса
-    opt.configure(step = 0.1)
+    opt.configure(step = 0.01)
 
     target_point = np.array([0, 0.5, -0.2]) # Целевая точка, которую хотим увидеть, используется для отладки
     model = ModelMinSquareSum(target_point)
