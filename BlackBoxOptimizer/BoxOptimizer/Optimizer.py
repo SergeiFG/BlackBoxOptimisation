@@ -68,6 +68,7 @@ class Optimizer(object):
 
 
 
+
     def getResult(self) -> np.ndarray:
         """
         getResult
@@ -113,3 +114,13 @@ class Optimizer(object):
         return self._CurrentOptimizerObject.setVecItemLimit(
             index = index, vec_dir = vec_dir, min = min, max = max)
         
+
+    def getOptimizer(self):
+        """
+        getOptimizer
+        ---
+        Возврат экземпляр модели оптимизации, с которой он работал
+        Необходимо для отладки, получения метрик, тестирования
+        """
+        return self._CurrentOptimizerObject
+
