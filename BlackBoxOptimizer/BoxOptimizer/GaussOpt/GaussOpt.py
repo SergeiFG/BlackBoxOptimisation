@@ -78,7 +78,7 @@ class GaussOpt(BaseOptimizer):
         bound = np.array()
         for min_vec, max_vec in zip(self._vec[:, OptimizedVectorData.min_index], self._vec[:, OptimizedVectorData.max_index]):
             to_attach = [min_vec, max_vec]
-            bound.attend(to_attach)
+            bound.append(to_attach)
         return bound
 
 
