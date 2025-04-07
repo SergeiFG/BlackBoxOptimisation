@@ -1,5 +1,7 @@
 import numpy as np
 
+from typing import Callable
+
 from scipy.stats import norm
 from scipy.optimize import differential_evolution
 from sklearn.gaussian_process import GaussianProcessRegressor
@@ -31,7 +33,7 @@ class GaussOpt(BaseOptimizer):
         self.bound_of_vec = GaussOpt._bound_func_()
 
     def _expected_improvement_max(self):
-        x = np.array(self._to_opt_model_data).reshape(1, -1)
+        x = np.array(self.history_to_opt_model_data).reshape(1, -1)
         mu, sigma = self.model.predict(x, return_std=True)
         sigma = sigma.reshape(-1, 1)
         
@@ -47,7 +49,7 @@ class GaussOpt(BaseOptimizer):
 
 
     def _expected_improvement_min(self):
-        x = np.array(x).reshape(1, -1)
+        x = np.array(self.history_to_opt_model_data).reshape(1, -1)
         mu, sigma = self.model.predict(x, return_std=True)
         sigma = sigma.reshape(-1, 1)
         
@@ -65,11 +67,11 @@ class GaussOpt(BaseOptimizer):
     def _propose_location(self):
         if self.target_to_opt:
             res = differential_evolution(func=GaussOpt._expected_improvement_max, 
-                        bounds=bounds,
+                        bounds=self.bound_of_vec,
                         args=(self.model, self.res_of_most_opt_vec))
         else:
             res = differential_evolution(func=GaussOpt._expected_improvement_min,
-                        bounds=bounds,
+                        bounds=self.bound_of_vec,
                         args=(self.model, self.res_of_most_opt_vec))
         return res.x
     
@@ -82,8 +84,11 @@ class GaussOpt(BaseOptimizer):
         return bound
 
 
-    def _main_calc_func(self, func):
+    def _main_calc_func(self, func: Callable[[np.ndarray], np.ndarray]):
         next_x = GaussOpt._propose_location()
-        self.history_to_opt_model_data.append(next_x)
+        self.history_to_opt_model_data.append(next_x.copy())
         self.res_of_most_opt_vec=min(func(next_x),self.res_of_most_opt_vec)
+         
                     
+    def getResult(self):
+        return list(self._to_opt_model_data.iterVectors())
