@@ -4,7 +4,6 @@ from typing import Callable
 
 from ..BaseOptimizer import BaseOptimizer
 
-from BlackBoxOptimizer.BoxOptimizer.BaseOptimizer import BaseOptimizer, OptimizedVectorData
 
 class MADSOptimizer(BaseOptimizer):
     def __init__(self, to_model_vec_size, from_model_vec_size, iter_limit, main_value_index = 0):
