@@ -14,7 +14,7 @@ x0 = [0.71, 0.51, 0.51]
 lb = [-1, -1, -1]
 ub=[]
 
-params = ["BB_OUTPUT_TYPE OBJ", "MAX_BB_EVAL 100", "UPPER_BOUND * 1", "DISPLAY_DEGREE 2", "DISPLAY_ALL_EVAL false", "DISPLAY_STATS BBE OBJ"] 
+params = ["BB_OUTPUT_TYPE OBJ", "MAX_BB_EVAL 100", "UPPER_BOUND * 1", "DISPLAY_DEGREE 2", "DISPLAY_ALL_EVAL true", "DISPLAY_STATS BBE OBJ", "INITIAL_MESH_SIZE 1"] 
 
 result = PyNomad.optimize(bb, x0, lb, ub, params)
 
