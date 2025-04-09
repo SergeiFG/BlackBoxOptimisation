@@ -1,1 +1,2 @@
 numpy==2.2.4
+scipy.interpolate.RBFInterpolator==1.13.1
