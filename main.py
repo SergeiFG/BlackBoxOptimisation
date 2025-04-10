@@ -4,7 +4,7 @@ main.py
 Файл отладки библиотеки
 
 NOTE:
->>> python -m pipreqs.pipreqs .
+# >>> python -m pipreqs.pipreqs .
 
 
 """
@@ -61,3 +61,5 @@ if __name__ == "__main__":
     # Запуск оптимизации
     opt.modelOptimize(func = test_object_function_variant_B)
 
+    # Пример запроса истории изменения вектора, отправляемого в модель
+    print(opt.getHistoricalData("vec_to_model"))

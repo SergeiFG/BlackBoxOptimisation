@@ -9,15 +9,19 @@ BaseOptimizer
 """
 
 # Подключаемые модули независимой конфигурации
-from typing import TypeVar, Callable, Tuple
+from typing import TypeVar, Callable, Tuple, Literal
 import numpy as np
-
+import time
 
 # Подключаемые модули зависимой конфигурации
 if __name__ == "__main__":
     pass
 else:
     pass
+
+
+DEBUG_THE_BIGGEST_ONE = 999999999
+"""Самое большое число. Пока в дебаге"""
 
 
 
@@ -35,6 +39,7 @@ class OptimizedVectorData(object):
     def __init__(
         self,
         vec_size : int,
+        seed     : int,
         vec_candidates_size : int = 1
         ) -> None:
         """
@@ -60,6 +65,10 @@ class OptimizedVectorData(object):
             raise ValueError("Значение размера vec_candidates_size не может быть меньше либо равно 0")
 
 
+        self._seed : int = seed
+        """Используемая база генератора для псевдослучайных последовательностей"""
+
+
         self._vec_size : int = vec_size
         """Размер хранимого вектора"""
         self._vec_candidates_size : int = vec_candidates_size
@@ -75,6 +84,9 @@ class OptimizedVectorData(object):
         self._vec[:, OptimizedVectorData.max_index] =  np.inf
         """Хранимый вектор значений, инициализируемый нулями, хранит значение минимума и максимума"""
 
+    @property
+    def vecs(self) -> np.ndarray:
+        return np.copy(self._vec[:, OptimizedVectorData.values_index_start:])
 
 
     def iterVectors(self) -> np.array:
@@ -121,6 +133,7 @@ class OptimizedVectorData(object):
         ---
         Получение начальных векторов с величинами по нормальному распределению
         """
+        np.random.seed(int(self._seed))
         vec : np.array
         for vec in self.iterVectors():
             vec[:] = np.random.uniform(
@@ -138,7 +151,40 @@ class OptimizedVectorData(object):
         TODO: Получение начального вектора с величинами в диапазонах допустимого минимума и максимума 
         по нормальному распределению 
         """
-        raise NotImplementedError
+        np.random.seed(int(self._seed))
+        
+        for vec, min, max in \
+            zip(
+                self._vec[:, OptimizedVectorData.values_index_start:],
+                self._vec[:, OptimizedVectorData.min_index],
+                self._vec[:, OptimizedVectorData.max_index],
+                ):
+            vec[:] = np.random.uniform(
+                low  = min if min != -np.inf else -DEBUG_THE_BIGGEST_ONE, 
+                high = max if max !=  np.inf else  DEBUG_THE_BIGGEST_ONE, 
+                size = np.size(vec)
+                ).copy()
+
+
+
+
+    def getInLimitsMatrix(self) -> np.array:
+        """
+        getInLimitsMatrix
+        ---
+        Получение бинарной матрицы признаков принадлежности параметра вектора диапазону
+        минимум-максимум
+        """
+        loc_matrix = np.array(
+            np.zeros(
+                shape = np.shape(
+                    self._vec[:,OptimizedVectorData.values_index_start:])), dtype = bool)
+
+        for vec, bool_vec in zip(self._vec, loc_matrix):
+            for vec_item, bool_item_num in zip(vec[OptimizedVectorData.values_index_start:], range(np.size(bool_vec))):
+                bool_vec[bool_item_num] = \
+                    (vec_item > vec[OptimizedVectorData.min_index] and vec_item < vec[OptimizedVectorData.max_index])
+        return loc_matrix
 
 
 
@@ -162,6 +208,7 @@ class BaseOptimizer(object):
                  to_model_vec_size    : int,
                  from_model_vec_size  : int,
                  iter_limit           : int,
+                 seed                 : int = None,
                  main_value_index     : int = 0
                  ) -> None:
         """
@@ -187,12 +234,15 @@ class BaseOptimizer(object):
         """Ограничение по количеству итераций алгоритма"""
         self._main_value_index     : int = main_value_index
         """Индекс целевого оптимизируемого параметра"""
+        self._seed                 : int = time.time() if seed is None else seed
+        """Используемая база генератора для псевдослучайных последовательностей"""
 
         self._init_param()
 
         # Внутренние общие параметры генератора
         # ==========================================================================================
-        # Не используются
+        self._historical_data_container : list = []
+        """Лист хранения исторических данных выполнения алгоритмов оптимизации"""
 
 
 
@@ -206,6 +256,21 @@ class BaseOptimizer(object):
         if key == "_to_model_vec_size":
             pass
         super().__setattr__(key, value)
+
+
+
+    def __getattribute__(self, name):
+        """
+        __getattribute__
+        ---
+        Обработка доступа к атрибутам
+        """
+        
+        # Доступ к методу _main_calc_func прописано добавление истории при каждом вызове
+        if name == "_main_calc_func":
+            self._collectIterHistoryData()
+        
+        return super().__getattribute__(name)
 
 
 
@@ -223,13 +288,15 @@ class BaseOptimizer(object):
 
         self._to_opt_model_data : OptimizedVectorData = OptimizedVectorData(
             vec_size            = self._to_model_vec_size,
-            vec_candidates_size = self._vec_candidates_size
+            vec_candidates_size = self._vec_candidates_size,
+            seed                = self._seed
             )
         """Выходной вектор, отправляемый в модель оптимизации"""
         
         self._from_model_data : OptimizedVectorData = OptimizedVectorData(
             vec_size            = self._from_model_vec_size,
-            vec_candidates_size = self._vec_candidates_size
+            vec_candidates_size = self._vec_candidates_size,
+            seed                = self._seed
             )
         """Входной вектор, получаемый от модели оптимизации"""
 
@@ -312,18 +379,109 @@ class BaseOptimizer(object):
 
 
 
-    def getResult(self):
+    def _collectIterHistoryData(self) -> None:
+        """
+        _collectIterHistoryData
+        ---
+        
+        Внутренний метод сохранения информации о текущей итерации
+        """
+        loc_dict_item : dict = {}
+        loc_dict_item["vec_to_model"]   = np.copy(self._to_opt_model_data.vecs)
+        loc_dict_item["vec_from_model"] = np.copy(self._from_model_data.vecs)
+        loc_dict_item["obj_val"]   = np.copy(self._from_model_data.vecs[self._main_value_index, :])
+        self._historical_data_container.append(loc_dict_item)
+
+
+
+    def getHistoricalData(self, key : None | Literal["vec_to_model", "vec_from_model", "obj_val"] = None) -> None | list:
+        """
+        getHistoricalData
+        ---
+        Получение исторических данных, собранных в результате работы алгоритма
+        """
+        if key is None:
+            return self._historical_data_container
+        
+        if key not in ["vec_to_model", "vec_from_model", "obj_val"]:
+            return None
+        
+        loc_output_list : list = []
+        
+        for item in self._historical_data_container:
+            loc_output_list.append(item[key])
+        return loc_output_list
+
+
+
+    def getResult(self) -> np.ndarray:
         """
         getResult
         ---
         Метод получения результата работы выбранного алгоритма
+        
+        Выполняет возврат последнего сохраненного заначения, полученного путем применения алгоритма
+        оптимизации.
         """
-        raise NotImplementedError
+        return self._to_opt_model_data.vecs
+
+
+
+    def setVecItemLimit(self, 
+                        index : int, 
+                        vec_dir : Literal["to_model", "from_model"] = "to_model",
+                        min : None | float = None,
+                        max : None | float = None) -> None:
+        """
+        setVecItemLimit
+        ---
+        
+        Установка ограничения для параметра внутри вектора
+        """
+        if vec_dir == "to_model":
+            self._to_opt_model_data.setLimitation(index = index, min = min, max = max)
+        elif vec_dir == "from_model":
+            self._from_model_data.setLimitation(index = index, min = min, max = max)
+        else:
+            ...
+
+
+
 
 
 
 # Отладка функционала базового генератора
 if __name__ == "__main__":
+    test_OptimizedVectorData = OptimizedVectorData(vec_size = 12, vec_candidates_size = 3, seed = time.time())
+    # test_OptimizedVectorData.setVectorsRandVal(0.0, 1.0)
+    test_OptimizedVectorData.setLimitation(4, 0.5, 1)
+    test_OptimizedVectorData.setLimitation(5, 0.5, 1)
+    test_OptimizedVectorData.setLimitation(6, 0.5, 1)
+    test_OptimizedVectorData.setVectorRandValByLimits()
+    for item in test_OptimizedVectorData.iterVectors():
+        print(item)
+        
+    print(test_OptimizedVectorData.getInLimitsMatrix())
+    
+    
+    
+    # test_BaseOptimizer = BaseOptimizer(
+    #     to_model_vec_size    = 5,
+    #     from_model_vec_size  = 4,
+    #     iter_limit           = 100,
+    # )
+    # print(test_BaseOptimizer._to_opt_model_data)
+    # print(test_BaseOptimizer.getResult())
+    
+    
+    # loc_vec = np.array([[1, 2, 3, 4]], dtype = float)
+    # print(loc_vec)
+    
+    # loc_vec = np.append(loc_vec, [8, 9, 10])
+    # loc_vec = np.extend(loc_vec, [[8, 9, 10, 114]], axis = 1)
+    # print(loc_vec)
+    
+    
     # test_OptimizedVectorData = OptimizedVectorData(vec_size = 12, vec_candidates_size = 3)
     # print(test_OptimizedVectorData)
 
@@ -336,12 +494,12 @@ if __name__ == "__main__":
     # for item in test_OptimizedVectorData.iterVectors():
     #     print(item)
 
-    test_BaseOptimizer = BaseOptimizer(
-        to_model_vec_size    = 5,
-        from_model_vec_size  = 4,
-        iter_limit           = 100,
-    )
-    test_BaseOptimizer.modelOptimize(func = lambda: print(""))
+    # test_BaseOptimizer = BaseOptimizer(
+    #     to_model_vec_size    = 5,
+    #     from_model_vec_size  = 4,
+    #     iter_limit           = 100,
+    # )
+    # test_BaseOptimizer.modelOptimize(func = lambda: print(""))
     # print(test_BaseOptimizer._to_opt_model_data.vec)
     # print(test_BaseOptimizer._to_opt_model_data)
     # print(test_BaseOptimizer.vecToModel)
