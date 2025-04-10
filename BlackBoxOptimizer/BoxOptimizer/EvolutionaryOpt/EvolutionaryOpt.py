@@ -3,12 +3,12 @@ import numpy as np
 import sys
 import os
 
-# Получаем абсолютный путь к корню проекта
+
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../'))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-# Теперь можно делать обычные импорты
+
 from BlackBoxOptimizer.BoxOptimizer.BaseOptimizer import BaseOptimizer
 from .internal_ep import EvolutionaryProgramming
 
@@ -58,14 +58,25 @@ class EvolutionaryOpt(BaseOptimizer):
         for to_vec in self._to_opt_model_data.iterVectors():
             to_vec[:] = best_x
 
-        # опционально — сохраняем историю, как в TestStepOpt
-        self.history_to_opt_model_data.append(best_x.copy())
-        self.history_from_model_data.append(np.array([best_f]))
+    def _collectIterHistoryData(self, best_x: np.ndarray, best_f: float) -> None:
+        """
+        Сохранение информации о текущей итерации
+        Использует реализацию из базового класса BaseOptimiser
+        
+        Parameters:
+            best_x (np.ndarray): Лучшее решение текущей итерации
+            best_f (float): Лучшее значение функции цели
+        """
+        self._to_opt_model_data.vecs = best_x.copy()
+        self._from_model_data.vecs = np.array([best_f])
+        super()._collectIterHistoryData()
 
     def getResult(self) -> np.ndarray:
         """
-        Возвращаем лучший найденный вектор.
+        Получение результатов оптимизации
+        Использует исторические данные из базового класса
         """
-        # если хотите просто в виде flat array:
-        return self._to_opt_model_data.vecs.flatten()
-    
+        historical_data = self.getHistoricalData("vec_to_model")
+        if historical_data and len(historical_data) > 0:
+            return historical_data[-1]  # Возвращаем последний best_x
+        return np.array([])
