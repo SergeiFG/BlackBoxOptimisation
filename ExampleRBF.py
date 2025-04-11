@@ -3,13 +3,8 @@ import os
 import numpy as np
 from typing import Tuple
 
-# Настройка путей
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../'))
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
-
-from BlackBoxOptimizer.BoxOptimizer.Optimizer import Optimizer
-from BlackBoxOptimizer.BoxOptimizer.EvolutionaryOpt.EvolutionaryOpt import EvolutionaryOpt
+from BlackBoxOptimizer import EvolutionaryOpt
+from BlackBoxOptimizer import Optimizer
 
 class ModelMinSquareSum:
     def __init__(self, target: np.ndarray):
