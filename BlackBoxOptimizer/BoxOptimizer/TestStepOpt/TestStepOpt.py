@@ -63,6 +63,9 @@ class TestStepOpt(BaseOptimizer):
 
                 candidates = [candidate_low, candidate_stay, candidate_high]
                 target_values = [func(candidate_low)[0], func(candidate_stay)[0], func(candidate_high)[0]]
+                # target_values = func(candidates)
+                # target_values = [x[0] for x in target_values]
+                """Два варианта обращения к внешней модели, оба работают"""
                 '''Вычисление внешней модели для каждого кандидата, по умолчанию сделано что целевая функция - первый элемент массива'''
                 point = candidates[np.argmin(target_values)].copy() # Обновляем точку, записываем в неё лучшего из кандидатов
                 """Основной цикл работы модели оптимизации"""
@@ -72,7 +75,7 @@ class TestStepOpt(BaseOptimizer):
             """Данные для записи в историю новая рабочая точка (MV) после итерации"""
 
             from_vec = func(to_vec)
-            history_from.append(from_vec.copy())
+            history_from.append(from_vec)
             """Данные для записи в историю итоги из внешней модели (CV) после итерации"""
 
         self.history_to_opt_model_data.append(history_to.copy())
