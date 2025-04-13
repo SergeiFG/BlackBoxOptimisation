@@ -65,3 +65,15 @@ class InternalTestInterface(BaseExternalModelInterface):
         self._usage_count = 0
         """При смене модели обязательно обнулим число обращений к ней"""
         self._external_model = external_model
+
+    def get_true_opimum(self) -> np.ndarray:
+        """
+        get_true_opimum
+        ---
+        Возвращает истинное оптимальное значение для данной модели
+
+        """
+        if true_optimum := self._external_model.true_optimum is None:
+            true_optimum = self._external_model.calculate_true_optimum()
+
+        return true_optimum
