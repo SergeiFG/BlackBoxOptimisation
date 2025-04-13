@@ -1,1 +1,3 @@
 from Models.ParabolaModel import ParabolaModel
+from Models.ConstrainedParabolaModel import ConstrainedParabolaModel
+
