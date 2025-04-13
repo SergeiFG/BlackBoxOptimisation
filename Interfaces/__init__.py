@@ -1,5 +1,2 @@
-# from .Interfaces import Optimizer
+from Interfaces.InternalTestInterface import InternalTestInterface
 
-
-from Interfaces.TestShaffleOpt import TestShaffleOpt
-from .BoxOptimizer.TestStepOpt import TestStepOpt

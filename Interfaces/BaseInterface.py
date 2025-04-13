@@ -44,6 +44,20 @@ class BaseExternalModelInterface:
         self.optimisation_type = optimisation_type
         self.target = target
 
+    def configure(self, **kwargs) -> None:
+        """
+        configure
+        ---
+        Метод настройки параметров работы интерфейса взаимодействия с внешней моделью
+        """
+        for key, value in kwargs.items():
+
+            # Проверка наличия атрибута настройки параметров работы интерфейса взаимодействия с внешней моделью
+            if key not in self.__dict__:
+                raise KeyError(f"{self.__class__.__name__} не содержит настраиваемого параметра {key}")
+            else:
+                self.__dict__[key] = value
+
     def evaluate_external_model(self, to_vec: np.ndarray) -> np.ndarray:
         """
         evaluate_external_model
