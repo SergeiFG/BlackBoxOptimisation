@@ -2,6 +2,7 @@ from ..BaseInterface import BaseExternalModelInterface
 
 import numpy as np
 
+
 class InternalTestInterface(BaseExternalModelInterface):
     """
     InternalTestInterface

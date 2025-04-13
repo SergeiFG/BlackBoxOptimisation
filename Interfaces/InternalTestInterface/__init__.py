@@ -1,2 +1,2 @@
-from ..InternalTestInterface import InternalTestInterface
+from .InternalTestInterface import InternalTestInterface
 
