@@ -74,7 +74,7 @@ class InternalTestInterface(BaseExternalModelInterface):
         Возвращает истинное оптимальное значение для данной модели
 
         """
-        if true_optimum := self._external_model.true_optimum is None:
+        if (true_optimum := self._external_model.true_optimum) is None:
             true_optimum = self._external_model.calculate_true_optimum()
 
         return true_optimum

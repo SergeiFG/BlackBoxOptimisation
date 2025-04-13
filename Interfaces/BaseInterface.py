@@ -61,7 +61,7 @@ class BaseExternalModelInterface:
             # Проверка наличия атрибута настройки параметров работы интерфейса взаимодействия с внешней моделью
             if key not in self.__dict__:
                 raise KeyError(f"{self.__class__.__name__} не содержит настраиваемого параметра {key}")
-            elif key is '_external_model':
+            elif key == '_external_model':
                 self.set_model(value)
             else:
                 self.__dict__[key] = value
