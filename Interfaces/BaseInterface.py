@@ -74,6 +74,7 @@ class BaseExternalModelInterface:
         """
 
         return self._external_model(to_vec)
+    # TODO: Подумать над возможностью реализовать мемоизацию для снижения числа вызовов внешней модели
 
     def apply_user_func(self, from_vec: np.ndarray) -> float:
         """
@@ -97,22 +98,34 @@ class BaseExternalModelInterface:
         transform_func = optimization_transform_funcs[self.optimisation_type]
         return transform_func(value, self.target)
 
-    def evaluate(self, to_vec: list[np.ndarray]) -> list[Tuple[float, np.ndarray]]:
+    def evaluate(self, to_vec: list[np.ndarray] | np.ndarray) -> list[Tuple[float, np.ndarray]] | Tuple[float, np.ndarray]:
         """
         evaluate
         ---
-        Метод вычисления внешней модели.
-        Вход - набор кандидатов MV - массив, каждый элемент которого потенциальный кандидат вектор принимаемых внешней моделью MV
-        Выход - Набор результатов вычисления для каждого кандидата - массив, каждый элемент которого кортеж (целевая переменная, numpy массив возвращаемых CV)
+        Метод вычисления внешней модели для двух вариантов входных данных.
+        Вход_v1 - набор кандидатов MV - массив, каждый элемент которого потенциальный кандидат вектор принимаемых внешней моделью MV
+        Вход_v2 - np.array вектор с единственным кандидатом
+        Выход_v1 - Набор результатов вычисления для каждого кандидата - массив, каждый элемент которого кортеж (целевая переменная, numpy массив возвращаемых CV)
+        Выход_v2 - единственный кортеж из целевого значения и numpy массива из остальных CV
         """
 
-        res = []
-        for candidate in to_vec:
-            from_vec = self.evaluate_external_model(candidate)
+        if type(to_vec) is list or type(to_vec) is np.ndarray and len(to_vec.shape) > 1:
+            res = []
+            for candidate in to_vec:
+                # print(candidate)
+                from_vec = self.evaluate_external_model(candidate)
+                user_val = self.apply_user_func(from_vec)
+                optimisation_value = self.transform_optimisation_type(user_val)
+                res.append((optimisation_value, from_vec.copy()))
+
+        elif type(to_vec) is np.ndarray and len(to_vec.shape) == 1:
+            from_vec = self.evaluate_external_model(to_vec)
             user_val = self.apply_user_func(from_vec)
             optimisation_value = self.transform_optimisation_type(user_val)
-            res.append((optimisation_value, from_vec.copy()))
-            # TODO: Подумать над возможностью реализовать мемоизацию для снижения числа вызовов внешней модели
+            res = (optimisation_value, from_vec.copy())
+
+        else:
+            raise TypeError('Неверно сформированные данные для вычисления во внешней модели')
 
         return res
 
