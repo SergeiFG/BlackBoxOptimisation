@@ -39,7 +39,7 @@ class BaseExternalModelInterface:
 
         """
 
-        self.external_model = external_model
+        self._external_model = external_model
         self.user_function = user_function
         self.optimisation_type = optimisation_type
         self.target = target
@@ -55,6 +55,8 @@ class BaseExternalModelInterface:
             # Проверка наличия атрибута настройки параметров работы интерфейса взаимодействия с внешней моделью
             if key not in self.__dict__:
                 raise KeyError(f"{self.__class__.__name__} не содержит настраиваемого параметра {key}")
+            elif key is '_external_model':
+                self.set_model(value)
             else:
                 self.__dict__[key] = value
 
@@ -65,7 +67,7 @@ class BaseExternalModelInterface:
         Метод обращения к внешней модели
         """
 
-        return self.external_model(to_vec)
+        return self._external_model(to_vec)
 
     def apply_user_func(self, from_vec: np.ndarray) -> float:
         """
@@ -104,8 +106,28 @@ class BaseExternalModelInterface:
             user_val = self.apply_user_func(from_vec)
             optimisation_value = self.transform_optimisation_type(user_val)
             res.append((optimisation_value, from_vec.copy()))
+            # TODO: Подумать над возможностью реализовать мемоизацию для снижения числа вызовов внешней модели
 
         return res
+
+    def get_model(self):
+        """
+        get_model
+        ---
+        Возвращает объект внешней модели
+
+        """
+        return self._external_model
+
+    def set_model(self, external_model) -> None:
+        """
+        set_model
+        ---
+        Устанавливает объект внешней модели
+
+        """
+
+        self._external_model = external_model
 
 
 
