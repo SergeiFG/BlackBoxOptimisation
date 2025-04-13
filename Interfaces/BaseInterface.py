@@ -19,6 +19,12 @@ optimization_transform_funcs = {
 
 
 class BaseExternalModelInterface:
+    """
+    BaseExternalModelInterface
+    ---
+    Класс базового интерфейса для взаимодействия с внешней моделью.
+    Используется как основа для классов для внутреннего тестирования, так и для финальной интеграции.
+    """
     def __init__(self,
                  external_model: Callable[[np.ndarray], np.ndarray], # TODO: Подумать, это должен быть класс или просто функция
                  user_function: Callable[[np.ndarray], float] = lambda x: x[0],
