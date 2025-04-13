@@ -1,103 +1,65 @@
-import sys
-import os
+from BlackBoxOptimizer import EvolutionaryOpt, Optimizer
+from Example import ModelMinSquareSum
 import numpy as np
-from typing import Tuple
 
-from BlackBoxOptimizer import EvolutionaryOpt
-from BlackBoxOptimizer import Optimizer
+class EvolutionaryOptTest:
+    def __init__(self):
+        # Целевая точка и параметры
+        self.target = np.array([0.0, 0.5, -0.2])
+        self.dimension = len(self.target)
+        
+        # Инициализация оптимизатора
+        self.optimizer = Optimizer(
+            optCls=EvolutionaryOpt,
+            seed=42,
+            to_model_vec_size=self.dimension,
+            from_model_vec_size=1,
+            iter_limit=100,
+            dimension=self.dimension,
+            population_size=30,
+            offspring_per_parent=2,
+            mutation_prob=0.3,
+            sigma_init=0.2,
+            t_max=100
+        )
+        
+        # Установка ограничений для всех параметров
+        for i in range(self.dimension):
+            self.optimizer.setVecItemLimit(i, "to_model", min=-1.0, max=1.0)
+        
+        # Создаем модель
+        self.model = ModelMinSquareSum(self.target)
 
-class ModelMinSquareSum:
-    def __init__(self, target: np.ndarray):
-        self.target = target
-        self._call_count = 0
-        self._max_calls = 1000  # Лимит вызовов функции
-
-    def evaluate(self, to_vec: np.ndarray, *args, **kwargs):
-        """Вычисление целевой функции с ограничением количества вызовов"""
-        self._call_count += 1
+    def run(self):
+        print("=== Starting Evolutionary Optimization Test ===")
+        print(f"Target: {self.target}")
         
-        if self._call_count > self._max_calls:
-            raise StopIteration(f"Достигнут лимит в {self._max_calls} вызовов")
-        
-        error = np.sum((to_vec - self.target) ** 2)
-        
-        # Для демонстрации выводим каждый 50-й вызов
-        if self._call_count % 50 == 0:
-            print(f"Call #{self._call_count}: Input {np.round(to_vec, 4)} → Error {error:.4f}")
-        
-        return error
-
-    def get_call_count(self):
-        return self._call_count
+        # Обертка для функции, возвращающая только ошибку
+        def evaluate(x):
+            return self.model.evaluate(x)[0]  # Берем только ошибку
+            
+        try:
+            # Запуск оптимизации
+            self.optimizer.modelOptimize(func=evaluate)
+            
+            # Получаем оптимизатор и его данные
+            ep_optimizer = self.optimizer.getOptimizer()
+            result = ep_optimizer._to_opt_model_data.vecs[:, 0]  # Получаем первый вектор
+            
+            if len(result) == self.dimension:
+                error = np.sum((result - self.target)**2)
+                print("\n=== Optimization Results ===")
+                print(f"Function calls: {self.model.get_call_count()}")
+                print(f"Best solution: {np.round(result, 4)}")
+                print(f"Target point: {self.target}")
+                print(f"Final error: {error:.6f}")
+            else:
+                print("Error: Optimization did not produce valid result")
+                
+        except Exception as e:
+            print(f"Optimization failed: {str(e)}")
+            raise
 
 if __name__ == "__main__":
-    print("\n=== Starting RBF Optimization Test ===")
-    
-    # Параметры теста
-    target_point = np.array([0, 0.5, -0.2])
-    dimension = len(target_point)
-    print(f"Target point: {target_point}")
-    print(f"Dimension: {dimension}")
-
-    # Создаем модель
-    model = ModelMinSquareSum(target_point)
-    
-    # Конфигурация оптимизатора
-    opt = Optimizer(
-        optCls=EvolutionaryOpt,
-        seed=42,
-        to_model_vec_size=dimension,
-        from_model_vec_size=1,
-        iter_limit=200,
-        dimension=dimension,
-        population_size=20,
-        offspring_per_parent=3,
-        mutation_prob=0.2,
-        sigma_init=0.15,
-        t_max=200
-    )
-
-    print("\nOptimization parameters:")
-    print(f"Population size: {opt._CurrentOptimizerObject.population_size}")
-    print(f"Max iterations: {opt._CurrentOptimizerObject.t_max}")
-    print(f"Mutation probability: {opt._CurrentOptimizerObject.mutation_prob}")
-
-    try:
-        print("\nStarting optimization...")
-        opt.modelOptimize(func=model.evaluate)
-        
-        # Получаем результаты
-        optimizer = opt.getOptimizer()
-        best_solution = optimizer.getResult()
-        history_points, history_values = optimizer.get_history()
-        
-        print("\n=== Optimization Results ===")
-        print(f"Total function calls: {model.get_call_count()}")
-        print(f"Best solution found: {np.round(best_solution, 4)}")
-        print(f"Target point:       {target_point}")
-        print(f"Difference:         {np.round(best_solution - target_point, 4)}")
-        print(f"Final error:        {np.sum((best_solution - target_point)**2):.6f}")
-        
-        # Анализ истории
-        print("\nOptimization history analysis:")
-        print(f"Total points in history: {len(history_points)}")
-        
-        if len(history_points) > 0:
-            print("\nBest 5 points in history:")
-            best_indices = np.argsort(history_values)[:5]
-            for idx in best_indices:
-                print(f"Iter {idx}: {np.round(history_points[idx], 4)} " 
-                      f"(error: {history_values[idx]:.6f})")
-            
-            print("\nConvergence progress:")
-            print(f"Initial error: {history_values[0]:.6f}")
-            print(f"Final error:   {history_values[-1]:.6f}")
-            print(f"Improvement:   {100*(history_values[0]-history_values[-1])/history_values[0]:.1f}%")
-            
-    except StopIteration as e:
-        print(f"\nOptimization stopped: {e}")
-    except Exception as e:
-        print(f"\nOptimization failed: {str(e)}")
-        raise
-
-    print("\n=== Test completed ===")
+    test = EvolutionaryOptTest()
+    test.run()
