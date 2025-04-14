@@ -5,7 +5,7 @@ import numpy as np
 class EvolutionaryOptTest:
     def __init__(self):
         # Целевая точка и параметры
-        self.target = np.array([0.0, 0.5, -0.2])
+        self.target = np.array([0.999, 0.990, -0.999])
         self.dimension = len(self.target)
         
         # Инициализация оптимизатора
