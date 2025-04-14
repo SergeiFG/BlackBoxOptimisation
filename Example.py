@@ -1,4 +1,4 @@
-from BlackBoxOptimizer import TestStepOpt
+from BlackBoxOptimizer.BoxOptimizer import GaussOpt
 from BlackBoxOptimizer import Optimizer
 
 import numpy as np
@@ -43,7 +43,7 @@ if __name__ == "__main__":
 
     # Создать класс оптимизатора
     opt = Optimizer(
-        optCls              = TestStepOpt,
+        optCls              = GaussOpt,
         seed                = 1546, # TODO: Проверить, точно ли работает. Сейчас выдаёт разные значения при одном seed
         to_model_vec_size   = 3,
         from_model_vec_size = 2,

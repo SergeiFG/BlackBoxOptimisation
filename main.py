@@ -12,7 +12,7 @@ NOTE:
 
 # Импорт основного класса оптимизации
 from BlackBoxOptimizer import Optimizer
-from BlackBoxOptimizer import TestShaffleOpt
+from BlackBoxOptimizer.BoxOptimizer import GaussOpt
 
 
 
@@ -48,7 +48,7 @@ if __name__ == "__main__":
 
     # Создать класс оптимизатора
     opt = Optimizer(
-        optCls              = TestShaffleOpt,
+        optCls              = GaussOpt,
         seed                = 1546, 
         to_model_vec_size   = 21,
         from_model_vec_size = 3,
@@ -62,4 +62,4 @@ if __name__ == "__main__":
     opt.modelOptimize(func = test_object_function_variant_B)
 
     # Пример запроса истории изменения вектора, отправляемого в модель
-    print(opt.getHistoricalData("vec_to_model"))
+    print(opt.getResult())

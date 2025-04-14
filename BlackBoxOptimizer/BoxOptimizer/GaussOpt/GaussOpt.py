@@ -20,10 +20,8 @@ class GaussOpt(BaseOptimizer):
         """
         super().__init__(*args, **kwargs)
 
-        self.seed : int = seed
-        """База генератора рандомных чисел"""
         self.model = GaussianProcessRegressor(kernel=kernel)
-        """Модель кригинга"""
+        """Модель кригинга, суррогатная модель"""
         self.history_to_opt_model_data : np.array = np.array(self._to_opt_model_data)
         """История данных для построения модели"""
         self.target_to_opt : bool = False
@@ -31,6 +29,7 @@ class GaussOpt(BaseOptimizer):
         self.res_of_most_opt_vec = self._to_opt_model_data[self._main_value_index]
         """Возрат наилучшего вектора, кандидат на min/max значение функции"""
         self.bound_of_vec = GaussOpt._bound_func_()
+        """Ограничения параметров векторов в виде массива"""
 
     def _expected_improvement_max(self):
         x = np.array(self.history_to_opt_model_data).reshape(1, -1)
@@ -68,11 +67,11 @@ class GaussOpt(BaseOptimizer):
         if self.target_to_opt:
             res = differential_evolution(func=GaussOpt._expected_improvement_max, 
                         bounds=self.bound_of_vec,
-                        args=(self.model, self.res_of_most_opt_vec))
+                        args=(self.model, self.res_of_most_opt_vec),seed=self._seed)
         else:
             res = differential_evolution(func=GaussOpt._expected_improvement_min,
                         bounds=self.bound_of_vec,
-                        args=(self.model, self.res_of_most_opt_vec))
+                        args=(self.model, self.res_of_most_opt_vec),seed=self._seed)
         return res.x
     
 
