@@ -22,6 +22,8 @@ class EvolutionaryProgramming:
 
         self.tau = 1 / np.sqrt(2 * np.sqrt(self.population_size * self.dimension))
         self.tau_prime = 1 / np.sqrt(2 * self.population_size * self.dimension)
+        self.min_epsilon = 1e-3  # Минимальное значение для epsilon
+        self.surrogate_update_freq = 5  # Частота обновления суррогатной модели
 
         # Инициализация популяции с гарантированным соблюдением границ
         self.population = self._initialize_population()
@@ -45,10 +47,10 @@ class EvolutionaryProgramming:
         x_clipped = np.clip(x, self.lower_bounds, self.upper_bounds)
         # Дополнительная проверка для каждого измерения
         for i in range(self.dimension):
-            if x_clipped[i] <= self.lower_bounds[i]:
-                x_clipped[i] = self.lower_bounds[i] + 1e-10
-            elif x_clipped[i] >= self.upper_bounds[i]:
-                x_clipped[i] = self.upper_bounds[i] - 1e-10
+            if np.isclose(x_clipped[i], self.lower_bounds[i]):
+                x_clipped[i] = self.lower_bounds[i] + 1e-5
+            elif np.isclose(x_clipped[i], self.upper_bounds[i]):
+                x_clipped[i] = self.upper_bounds[i] - 1e-5
         return x_clipped
 
     def mutate(self, parent_x, parent_sigma):
@@ -57,11 +59,17 @@ class EvolutionaryProgramming:
             child_x = parent_x.copy()
             child_sigma = parent_sigma.copy()
             
-            # Применяем мутацию
+            # Применяем мутацию с контролем у границ
             mask = (np.random.rand(self.dimension) <= self.mutation_prob)
-            child_x += mask * (child_sigma * np.random.randn(self.dimension))
+            mutation = mask * (child_sigma * np.random.randn(self.dimension))
             
-            # Строгое соблюдение границ
+            # Плавное ограничение у границ
+            too_low = (child_x + mutation) <= self.lower_bounds
+            too_high = (child_x + mutation) >= self.upper_bounds
+            mutation[too_low] *= 0.5
+            mutation[too_high] *= 0.5
+            
+            child_x += mutation
             child_x = self._enforce_bounds(child_x)
             
             # Мутация параметров мутации
@@ -78,24 +86,22 @@ class EvolutionaryProgramming:
         return offspring
 
     def update_surrogate(self):
-        epsilon = np.mean(np.std(self.population, axis=0))
-        if epsilon < 1e-6:
-            epsilon = 1e-3
+        """Обновление суррогатной модели с защитой от сингулярности"""
+        epsilon = max(np.mean(np.std(self.population, axis=0)), self.min_epsilon)
+        
+        # Добавляем небольшой шум для предотвращения сингулярности
+        noisy_population = self.population + np.random.normal(0, 1e-8, self.population.shape)
+        
         try:
             self.surrogate_model = RBFInterpolator(
-                self.population,
+                noisy_population,
                 self.function_values,
-                kernel='gaussian',
+                kernel='linear',  # Используем линейное ядро для стабильности
                 epsilon=epsilon
             )
         except np.linalg.LinAlgError:
-            self.population += np.random.normal(0, 0.001, self.population.shape)
-            self.surrogate_model = RBFInterpolator(
-                self.population,
-                self.function_values,
-                kernel='gaussian',
-                epsilon=epsilon
-            )
+            # Fallback: отключаем суррогатную модель при ошибке
+            self.surrogate_model = None
 
     def select_best_offspring(self, offspring):
         if not offspring:
@@ -120,7 +126,10 @@ class EvolutionaryProgramming:
                 # Проверка границ
                 self._validate_population()
             else:
-                self.update_surrogate()
+                # Обновляем суррогатную модель не каждый шаг
+                if t % self.surrogate_update_freq == 0:
+                    self.update_surrogate()
+                
                 new_pop = []
                 new_sig = []
                 new_val = []
@@ -158,8 +167,8 @@ class EvolutionaryProgramming:
 #     return np.sum(x**2)
 
 # # Ограничения: x[0] ∈ [0,10], x[1] ∈ [-5,5], x[2] ∈ [1,100]
-# lower_bounds = [0, -5, 1]
-# upper_bounds = [10, 5, 100]
+# lower_bounds = [0, 10, 1]
+# upper_bounds = [10, 50, 100]
 
 # ep = EvolutionaryProgramming(
 #     func=objective,
