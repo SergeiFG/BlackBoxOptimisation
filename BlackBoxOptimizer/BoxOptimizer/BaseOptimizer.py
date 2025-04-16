@@ -209,7 +209,9 @@ class BaseOptimizer(object):
                  from_model_vec_size  : int,
                  iter_limit           : int,
                  seed                 : int = None,
-                 main_value_index     : int = 0
+                 main_value_index     : int = 0,
+                 *args,
+                 **kwargs
                  ) -> None:
         """
         __init__
@@ -331,9 +333,7 @@ class BaseOptimizer(object):
         for key, value in kwargs.items():
             
             # Проверка наличия атрибута настройки параметров работы оптимизатора
-            if key not in self.__dict__:
-                raise KeyError(f"{self.__class__.__name__} не содержит настраиваемого параметра {key}")
-            else:
+            if key in self.__dict__:
                 self.__dict__[key] = value
 
 

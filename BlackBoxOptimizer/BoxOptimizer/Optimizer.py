@@ -6,7 +6,28 @@ More details.
 from .BaseOptimizer import BaseOptimizer
 
 import numpy as np
-from typing import Callable, Literal
+from typing import Callable, Literal, Tuple
+import enum
+
+
+class OptimisationTypes(enum.Enum):
+    """
+    OptimisationTypes
+    ---
+    Enum для различных типов задач оптимизации
+
+    """
+    minimize = 0
+    maximize = 1
+    to_target = 2
+
+
+optimization_transform_funcs = {
+    OptimisationTypes.minimize: lambda x, y = None: x,
+    OptimisationTypes.maximize: lambda x, y = None: -x,
+    OptimisationTypes.to_target: lambda x, y: x - y,
+}
+"""Словарь преобразования задачи оптимизации для приведения её к виду argmin(f(x))"""
 
 
 
@@ -19,6 +40,7 @@ class Optimizer(object):
     """
     def __init__(self, 
                  optCls : object = None,
+                 external_model: Callable[[np.ndarray], np.ndarray] = None,
                  *args, 
                  **kwargs
                  ) -> None:
@@ -27,6 +49,7 @@ class Optimizer(object):
         ---
         Аргументы:
             optCls : object - выбранный класс оптимизации
+            external_model: Callable[[np.ndarray], np.ndarray] - Функция вычисления внешней модели
         """
 
         self._currentOptimizerClass = optCls
@@ -37,6 +60,24 @@ class Optimizer(object):
 
         self._CurrentOptimizerObject = self._currentOptimizerClass(*args, **kwargs)
         """Текущий объект оптимизации"""
+
+        self.external_model = external_model
+        """Текущая внешняя модель - черный ящик"""
+
+        if self._currentOptimizerClass is None:
+            raise ValueError("Не указана внешняя модель")
+
+        self.user_function: Callable[[np.ndarray], float] = kwargs['user_function'] if 'user_function' in kwargs.keys() else lambda x: x[0]
+        """Пользовательская функция дополнительной обработки выхода внешней модели"""
+
+        self.optimisation_type: OptimisationTypes = kwargs['optimisation_type'] if 'optimisation_type' in kwargs.keys() else OptimisationTypes.minimize
+        """Тип задачи оптимизации (минимизация целевой функции, максимизация или приведение к заданному значению)"""
+
+        self.target: float | None = kwargs['target'] if 'target' in kwargs.keys() else None
+        """Значение, к которому необходимо привести целевую функцию при выборе типа оптимизации to_target"""
+
+        self._usage_count: int = 0
+        """Число обращений к внешней модели"""
 
 
 
@@ -54,20 +95,25 @@ class Optimizer(object):
         ... optimizer = SpecificOptimizer()
         ... optimizer.configure(some_parameter_A = some_value_A, some_parameter_B = some_value_B)
         """
+
+        for key, value in kwargs.items():
+            if key == "external_model":
+                self.set_model(value)
+            elif key in self.__dict__:
+                self.__dict__[key] = value
+        """Если настраиваем сам класс Optimizer - интерфейс взаимодействия с модулем оптимизации"""
+
         return self._CurrentOptimizerObject.configure(**kwargs)
 
 
 
-    def modelOptimize(self, func : Callable[[np.array], np.array]) -> None:
+    def modelOptimize(self) -> None:
         """
         modelOptimize
         ---
         Запуск оптимизации через передачу функции черного ящика
         """
-        return self._CurrentOptimizerObject.modelOptimize(func)
-
-
-
+        return self._CurrentOptimizerObject.modelOptimize(self.evaluate)
 
     def getResult(self) -> np.ndarray:
         """
@@ -113,7 +159,6 @@ class Optimizer(object):
         """
         return self._CurrentOptimizerObject.setVecItemLimit(
             index = index, vec_dir = vec_dir, min = min, max = max)
-        
 
     def getOptimizer(self):
         """
@@ -123,4 +168,98 @@ class Optimizer(object):
         Необходимо для отладки, получения метрик, тестирования
         """
         return self._CurrentOptimizerObject
+
+    def evaluate_external_model(self, to_vec: np.ndarray) -> np.ndarray:
+        """
+        evaluate_external_model
+        ---
+        Метод обращения к внешней модели
+        """
+        self._usage_count += 1
+        return self.external_model(to_vec)
+    # TODO: Подумать над возможностью реализовать мемоизацию для снижения числа вызовов внешней модели
+
+    def apply_user_func(self, from_vec: np.ndarray) -> float:
+        """
+        apply_user_func
+        ---
+        Метод применения пользовательской функции к выходу внешней модели
+        """
+
+        return self.user_function(from_vec)
+
+    def transform_optimisation_type(self, value: float) -> float:
+        """
+        transform_optimisation_type
+        ---
+        Метод преобразования выхода пользовательской функции для приведения задачи к минимизации
+        """
+
+        if self.optimisation_type is OptimisationTypes.to_target and self.target is None:
+            raise AttributeError('Не задана цель оптимизации')
+
+        transform_func = optimization_transform_funcs[self.optimisation_type]
+        return transform_func(value, self.target)
+
+    def evaluate(self, to_vec: list[np.ndarray] | np.ndarray) -> list[Tuple[float, np.ndarray]] | Tuple[float, np.ndarray]:
+        """
+        evaluate
+        ---
+        Метод вычисления внешней модели для двух вариантов входных данных.
+        Вход_v1 - набор кандидатов MV - массив, каждый элемент которого потенциальный кандидат вектор принимаемых внешней моделью MV
+        Вход_v2 - np.array вектор с единственным кандидатом
+        Выход_v1 - Набор результатов вычисления для каждого кандидата - массив, каждый элемент которого кортеж (целевая переменная, numpy массив возвращаемых CV)
+        Выход_v2 - единственный кортеж из целевого значения и numpy массива из остальных CV
+        """
+
+        if type(to_vec) is list or type(to_vec) is np.ndarray and len(to_vec.shape) > 1:
+            res = []
+            for candidate in to_vec:
+                # print(candidate)
+                from_vec = self.evaluate_external_model(candidate)
+                user_val = self.apply_user_func(from_vec)
+                optimisation_value = self.transform_optimisation_type(user_val)
+                res.append((optimisation_value, from_vec.copy()))
+
+        elif type(to_vec) is np.ndarray and len(to_vec.shape) == 1:
+            from_vec = self.evaluate_external_model(to_vec)
+            user_val = self.apply_user_func(from_vec)
+            optimisation_value = self.transform_optimisation_type(user_val)
+            res = (optimisation_value, from_vec.copy())
+
+        else:
+            raise TypeError('Неверно сформированные данные для вычисления во внешней модели')
+
+        return res
+
+    def get_usage_count(self) -> int:
+        """
+        get_usage_count
+        ---
+        Возвращает число вызовов внешней модели
+
+        """
+
+        return self._usage_count
+
+    def refresh_usage_count(self) -> None:
+        """
+        refresh_usage_count
+        ---
+        Обнуляет число вызовов внешней модели
+
+        """
+
+        self._usage_count = 0
+
+    def set_model(self, external_model) -> None:
+        """
+        set_model
+        ---
+        Устанавливает объект внешней модели
+
+        """
+        self._usage_count = 0
+        """При смене модели обязательно обнулим число обращений к ней"""
+        self.external_model = external_model
 

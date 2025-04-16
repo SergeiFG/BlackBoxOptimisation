@@ -1,2 +1,0 @@
-from .InternalTestInterface import InternalTestInterface
-
