@@ -37,8 +37,8 @@ if __name__ == "__main__":
     print('История вычисления внешней моделью черным ящиком')
     print(currentOptimizer.history_from_model_data)
     print(20 * '=')
-    # print(f'Число вызовов внешней модели - {Interface.get_usage_count()}')
-    # print(20 * '=')
+    print(f'Число вызовов внешней модели - {opt.get_usage_count()}')
+    print(20 * '=')
     print('Результат')
     print(currentOptimizer.getResult())
 
