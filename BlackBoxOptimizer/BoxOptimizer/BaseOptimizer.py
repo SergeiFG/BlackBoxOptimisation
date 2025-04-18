@@ -333,7 +333,9 @@ class BaseOptimizer(object):
         for key, value in kwargs.items():
             
             # Проверка наличия атрибута настройки параметров работы оптимизатора
-            if key in self.__dict__:
+            if key not in self.__dict__:
+                raise KeyError(f"{self.__class__.__name__} не содержит настраиваемого параметра {key}")
+            else:
                 self.__dict__[key] = value
 
 

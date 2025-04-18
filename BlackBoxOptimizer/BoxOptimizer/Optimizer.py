@@ -61,10 +61,10 @@ class Optimizer(object):
         self._CurrentOptimizerObject = self._currentOptimizerClass(*args, **kwargs)
         """Текущий объект оптимизации"""
 
-        self.external_model = external_model
+        self.external_model: Callable[[np.ndarray], np.ndarray] = external_model
         """Текущая внешняя модель - черный ящик"""
 
-        if self._currentOptimizerClass is None:
+        if self.external_model is None:
             raise ValueError("Не указана внешняя модель")
 
         self.user_function: Callable[[np.ndarray], float] = kwargs['user_function'] if 'user_function' in kwargs.keys() else lambda x: x[0]
@@ -98,14 +98,15 @@ class Optimizer(object):
 
         for key, value in kwargs.items():
             if key == "external_model":
-                self.set_model(value)
+                self._set_model(value)
+                """Изменяем параметр в Optimizer"""
             elif key in self.__dict__:
                 self.__dict__[key] = value
-        """Если настраиваем сам класс Optimizer - интерфейс взаимодействия с модулем оптимизации"""
-
-        return self._CurrentOptimizerObject.configure(**kwargs)
-
-
+                """Изменяем параметр в Optimizer"""
+            else:
+                # print(key, value)
+                self._CurrentOptimizerObject.configure(**{key: value})
+                """Если не нашли параметр в Optimizer, конфигурируем алгоритм оптимизации"""
 
     def modelOptimize(self) -> None:
         """
@@ -113,7 +114,7 @@ class Optimizer(object):
         ---
         Запуск оптимизации через передачу функции черного ящика
         """
-        return self._CurrentOptimizerObject.modelOptimize(self.evaluate)
+        return self._CurrentOptimizerObject.modelOptimize(self._evaluate)
 
     def getResult(self) -> np.ndarray:
         """
@@ -169,7 +170,7 @@ class Optimizer(object):
         """
         return self._CurrentOptimizerObject
 
-    def evaluate_external_model(self, to_vec: np.ndarray) -> np.ndarray:
+    def _evaluate_external_model(self, to_vec: np.ndarray) -> np.ndarray:
         """
         evaluate_external_model
         ---
@@ -179,7 +180,7 @@ class Optimizer(object):
         return self.external_model(to_vec)
     # TODO: Подумать над возможностью реализовать мемоизацию для снижения числа вызовов внешней модели
 
-    def apply_user_func(self, from_vec: np.ndarray) -> float:
+    def _apply_user_func(self, from_vec: np.ndarray) -> float:
         """
         apply_user_func
         ---
@@ -188,7 +189,7 @@ class Optimizer(object):
 
         return self.user_function(from_vec)
 
-    def transform_optimisation_type(self, value: float) -> float:
+    def _transform_optimisation_type(self, value: float) -> float:
         """
         transform_optimisation_type
         ---
@@ -201,7 +202,7 @@ class Optimizer(object):
         transform_func = optimization_transform_funcs[self.optimisation_type]
         return transform_func(value, self.target)
 
-    def evaluate(self, to_vec: list[np.ndarray] | np.ndarray) -> list[Tuple[float, np.ndarray]] | Tuple[float, np.ndarray]:
+    def _evaluate(self, to_vec: list[np.ndarray] | np.ndarray) -> list[Tuple[float, np.ndarray]] | Tuple[float, np.ndarray]:
         """
         evaluate
         ---
@@ -216,15 +217,15 @@ class Optimizer(object):
             res = []
             for candidate in to_vec:
                 # print(candidate)
-                from_vec = self.evaluate_external_model(candidate)
-                user_val = self.apply_user_func(from_vec)
-                optimisation_value = self.transform_optimisation_type(user_val)
+                from_vec = self._evaluate_external_model(candidate)
+                user_val = self._apply_user_func(from_vec)
+                optimisation_value = self._transform_optimisation_type(user_val)
                 res.append((optimisation_value, from_vec.copy()))
 
         elif type(to_vec) is np.ndarray and len(to_vec.shape) == 1:
-            from_vec = self.evaluate_external_model(to_vec)
-            user_val = self.apply_user_func(from_vec)
-            optimisation_value = self.transform_optimisation_type(user_val)
+            from_vec = self._evaluate_external_model(to_vec)
+            user_val = self._apply_user_func(from_vec)
+            optimisation_value = self._transform_optimisation_type(user_val)
             res = (optimisation_value, from_vec.copy())
 
         else:
@@ -242,7 +243,7 @@ class Optimizer(object):
 
         return self._usage_count
 
-    def refresh_usage_count(self) -> None:
+    def _refresh_usage_count(self) -> None:
         """
         refresh_usage_count
         ---
@@ -252,14 +253,14 @@ class Optimizer(object):
 
         self._usage_count = 0
 
-    def set_model(self, external_model) -> None:
+    def _set_model(self, external_model) -> None:
         """
         set_model
         ---
         Устанавливает объект внешней модели
 
         """
-        self._usage_count = 0
+        self._refresh_usage_count()
         """При смене модели обязательно обнулим число обращений к ней"""
         self.external_model = external_model
 
