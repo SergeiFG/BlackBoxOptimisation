@@ -104,7 +104,6 @@ class Optimizer(object):
                 self.__dict__[key] = value
                 """Изменяем параметр в Optimizer"""
             else:
-                # print(key, value)
                 self._CurrentOptimizerObject.configure(**{key: value})
                 """Если не нашли параметр в Optimizer, конфигурируем алгоритм оптимизации"""
 
