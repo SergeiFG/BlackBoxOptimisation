@@ -1,5 +1,5 @@
-import numpy as np
 import math
+import numpy as np
 from typing import Callable,Tuple
 from ..BaseOptimizer import BaseOptimizer,OptimizedVectorData
 
@@ -10,7 +10,9 @@ class SimulatedAnnealingOptimizer(BaseOptimizer):
                  iter_limit: int,
                  initial_temperature: float = 100.0,
                  cooling_rate: float = 0.9,
-                 main_value_index: int = 0) -> None:
+                 main_value_index: int = 0,
+                 maximize: bool = False  # Новый параметр (по умолчанию ищем минимум)
+                 ) -> None:
 
         super().__init__(
             to_model_vec_size=to_model_vec_size,
@@ -22,7 +24,8 @@ class SimulatedAnnealingOptimizer(BaseOptimizer):
         self._cooling_rate = cooling_rate
         self._current_energy = None 
         self._best_vector = None     
-        self._best_energy = None    
+        self._best_energy = None  
+        self._maximize = maximize  # Сохраняем режим оптимизации  
 
     def _init_param(self):
         """Переопределение метода для установки 1 кандидата (текущий вектор)."""
@@ -43,10 +46,16 @@ class SimulatedAnnealingOptimizer(BaseOptimizer):
 
     def _accept_solution(self, new_energy: float) -> bool:
         """Определить, принять ли новое решение (с учетом температуры)."""
-        if new_energy < self._current_energy:
-            return True
-        # Вероятность принятия худшего решения
-        probability = math.exp(-(new_energy - self._current_energy) / self._temperature)
+        if self._maximize:
+            # Для максимизации: принимаем решения с большей энергией
+            if new_energy > self._current_energy:
+                return True
+            probability = math.exp((new_energy - self._current_energy) / self._temperature)
+        else:
+            # Для минимизации (старый вариант)
+            if new_energy < self._current_energy:
+                return True
+            probability = math.exp(-(new_energy - self._current_energy) / self._temperature)
         return np.random.random() < probability
 
     def _main_calc_func(self) -> None:
@@ -80,9 +89,18 @@ class SimulatedAnnealingOptimizer(BaseOptimizer):
 
             # Обновление лучшего решения
             current_energy = result[self._main_value_index]
-            if self._best_energy is None or current_energy < self._best_energy:
+            if self._best_energy is None:
                 self._best_energy = current_energy
                 self._best_vector = current_vector.copy()
+            else:
+                if self._maximize:
+                    if current_energy > self._best_energy:  # Для максимизации
+                        self._best_energy = current_energy
+                        self._best_vector = current_vector.copy()
+                else:
+                    if current_energy < self._best_energy:  # Для минимизации
+                        self._best_energy = current_energy
+                        self._best_vector = current_vector.copy()
 
             self._main_calc_func()
 
