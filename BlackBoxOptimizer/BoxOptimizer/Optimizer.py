@@ -106,6 +106,8 @@ class Optimizer(object):
             if key == "external_model":
                 self._set_model(value)
                 """Изменяем параметр в Optimizer"""
+            elif key == "_from_model_vec_size":
+                self._CurrentOptimizerObject.configure(**{key: value+1})
             elif key in self.__dict__:
                 self.__dict__[key] = value
                 """Изменяем параметр в Optimizer"""

@@ -220,7 +220,6 @@ class BaseOptimizer(object):
             to_model_vec_size    : int - Размерность вектора принимаемого целевой моделью оптимизации
             from_model_vec_size  : int - Размерность вектора получаемого от целевой модели оптимизации
             iter_limit           : int - Ограничение по количеству доступных итераций работы алгоритма
-            main_value_index     : int - Индекс целевого оптимизируемого параметра
         """
 
         # Параметры генератора, доступные для перенастройки
@@ -228,7 +227,7 @@ class BaseOptimizer(object):
 
         self._to_model_vec_size    : int = to_model_vec_size
         """Размер входного вектора параметров"""
-        self._from_model_vec_size  : int = from_model_vec_size
+        self._from_model_vec_size  : int = from_model_vec_size + 1
         """Размер выходного вектора параметров"""
         self._iteration_limitation : int = iter_limit
         """Ограничение по количеству итераций алгоритма"""
@@ -255,6 +254,8 @@ class BaseOptimizer(object):
         # TODO: Добавить проверки атрибутов
         if key == "_to_model_vec_size":
             pass
+        if key == "_from_model_vec_size":
+            super().__setattr__(key, value+1)
         super().__setattr__(key, value)
 
 

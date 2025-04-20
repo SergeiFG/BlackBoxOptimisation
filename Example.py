@@ -17,7 +17,7 @@ if __name__ == "__main__":
         optCls              = TestStepOpt,
         seed                = 1546, # TODO: Проверить, точно ли работает. Сейчас выдаёт разные значения при одном seed
         to_model_vec_size   = 3,
-        from_model_vec_size = 2,
+        from_model_vec_size = 1,
         iter_limit          = 100,
         external_model = model.evaluate,
         # user_function = lambda x: x[0],
@@ -26,7 +26,7 @@ if __name__ == "__main__":
         )
 
     # Пример конфигурирования для конктретной реализации оптимизирущего класса
-    opt.configure(step = 0.01, user_function = lambda x: x[0])
+    opt.configure(step = 0.01, user_function = lambda x: x[0], _from_model_vec_size=1)
 
     # Запуск оптимизации
     opt.modelOptimize()
@@ -41,6 +41,7 @@ if __name__ == "__main__":
     print(20 * '=')
     print('Результат')
     print(currentOptimizer.getResult())
+
 
 
 
