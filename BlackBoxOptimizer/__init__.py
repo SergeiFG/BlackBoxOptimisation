@@ -1,4 +1,4 @@
-from .BoxOptimizer import Optimizer
+from .BoxOptimizer import Optimizer, OptimisationTypes
 
 
 from .BoxOptimizer.TestShaffleOpt import TestShaffleOpt

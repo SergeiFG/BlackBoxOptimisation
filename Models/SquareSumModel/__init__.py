@@ -1,0 +1,2 @@
+from .SquareSumModel import SquareSumModel
+
