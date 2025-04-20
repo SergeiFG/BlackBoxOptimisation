@@ -41,7 +41,10 @@ class Optimizer(object):
     def __init__(self, 
                  optCls : object = None,
                  external_model: Callable[[np.ndarray], np.ndarray] = None,
-                 *args, 
+                 user_function: Callable[[np.ndarray], float] = lambda x: x[0],
+                 optimisation_type: OptimisationTypes = OptimisationTypes.minimize,
+                 target: float | None = None,
+                 *args,
                  **kwargs
                  ) -> None:
         """
@@ -50,6 +53,9 @@ class Optimizer(object):
         Аргументы:
             optCls : object - выбранный класс оптимизации
             external_model: Callable[[np.ndarray], np.ndarray] - Функция вычисления внешней модели
+            user_function: Callable[[np.ndarray], float] = lambda x: x[0] - Пользовательская функция дополнительной обработки выхода внешней модели
+            optimisation_type: OptimisationTypes = OptimisationTypes.minimize - Тип задачи оптимизации {минимизация, максимизация, приведение к значению}
+            target: float | None = None - Значение, к которому необходимо привести целевую функцию при выборе типа оптимизации to_target
         """
 
         self._currentOptimizerClass = optCls
@@ -67,13 +73,13 @@ class Optimizer(object):
         if self.external_model is None:
             raise ValueError("Не указана внешняя модель")
 
-        self.user_function: Callable[[np.ndarray], float] = kwargs['user_function'] if 'user_function' in kwargs.keys() else lambda x: x[0]
+        self.user_function: Callable[[np.ndarray], float] = user_function
         """Пользовательская функция дополнительной обработки выхода внешней модели"""
 
-        self.optimisation_type: OptimisationTypes = kwargs['optimisation_type'] if 'optimisation_type' in kwargs.keys() else OptimisationTypes.minimize
+        self.optimisation_type: OptimisationTypes = optimisation_type
         """Тип задачи оптимизации (минимизация целевой функции, максимизация или приведение к заданному значению)"""
 
-        self.target: float | None = kwargs['target'] if 'target' in kwargs.keys() else None
+        self.target: float | None = target
         """Значение, к которому необходимо привести целевую функцию при выборе типа оптимизации to_target"""
 
         self._usage_count: int = 0
@@ -219,13 +225,15 @@ class Optimizer(object):
                 from_vec = self._evaluate_external_model(candidate)
                 user_val = self._apply_user_func(from_vec)
                 optimisation_value = self._transform_optimisation_type(user_val)
-                res.append((optimisation_value, from_vec.copy()))
+                # res.append((optimisation_value, from_vec.copy())) # Версия с кортежем
+                res.append(np.array([optimisation_value, *from_vec.copy()])) # Версия с numpy массивом
 
         elif type(to_vec) is np.ndarray and len(to_vec.shape) == 1:
             from_vec = self._evaluate_external_model(to_vec)
             user_val = self._apply_user_func(from_vec)
             optimisation_value = self._transform_optimisation_type(user_val)
-            res = (optimisation_value, from_vec.copy())
+            # res = (optimisation_value, from_vec.copy()) # Версия с кортежем
+            res = np.array([optimisation_value, *from_vec.copy()]) # Версия с numpy массивом
 
         else:
             raise TypeError('Неверно сформированные данные для вычисления во внешней модели')
