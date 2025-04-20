@@ -1,0 +1,110 @@
+syntax = "proto3";
+
+package Grpc.RtoApi;
+option csharp_namespace = "Grpc.RtoApi";
+
+//Запрос статуса сервиса
+message ArgRequest {
+  string accessToken = 1;
+}
+
+//Ответ на запрос статуса сервиса
+message ServiceStatus {
+  string serviceId = 1;
+  string status = 2;
+  string serviceType = 3;
+  string user = 4;
+  string message = 5;
+}
+
+message TagType {
+  string id = 1;
+  string name = 2;
+  string dataType = 3; // Тип данных (Integer, Numeric, Bool)
+  double lower_bound = 4;  // Нижняя граница значения
+  double upper_bound = 5;  // Верхняя граница значения
+}
+
+// Значение тега (переменной)
+message TagVal {
+    string tagId = 1;      // Идентификатор тега (GUID)
+    uint64 timeStamp = 2;  // Временная метка
+    double numericValue = 3; // Числовое значение
+    bool isGood = 4;       // Флаг корректности значения
+}
+
+// Запрос на создание сессии оптимизации
+message StartRequest {
+    string accessToken = 1;    
+    repeated TagType cvs = 2;            // Перечень CV
+    repeated TagType mvs = 3;            // Перечень MV    
+    string objective_function = 4;       // Целевая функция с [guid]
+    bool maximize = 5;                   // Флаг максимизации
+    string optimization_method = 6;      // Метод оптимизации
+    int32 max_iterations = 7;            // Максимальное число итераций
+    string model_id = 8;                 // Идентификатор модели
+}
+
+// Ответ на создание сессии
+message StartResponse {
+    string optimization_instance_id = 1; // ID созданной сессии
+    bool is_good = 2;                   // Флаг успешного создания
+    string message = 3;                 // Сообщение о результате
+}
+
+// Запрос на запуск/возобновление оптимизации
+message StartOptimizeRequest {
+    string accessToken = 1;    
+    string optimization_instance_id = 2; // ID сессии
+    repeated TagVal initial_cvs = 3;     // Начальные значения CV
+    repeated TagVal initial_mvs = 4;     // Начальные значения MV    
+}
+
+// Ответ на запуск оптимизации
+message StartOptimizeResponse {
+    repeated TagVal MVs = 1;            // Текущие значения MV
+    string sessionId = 2;               // ID сессии
+    int32 flag = 3;                     // Флаг состояния (0 - успех, 1 - возобновлено после паузы, 2 - уже выполняется)
+    string message = 4;                 // Сообщение о результате
+}
+
+// Запрос на паузу оптимизации
+message PauseRequest {
+    string accessToken = 1;    
+    string sessionId = 2;               // ID сессии
+}
+
+// Ответ на паузу оптимизации
+message PauseResponse {
+    string message = 1;                 // Сообщение о результате
+    bool is_paused = 2;                 // Флаг успешной паузы
+}
+
+// Запрос на остановку сессии
+message StopRequest {
+    string accessToken = 1;    
+    string sessionId = 2;               // ID сессии
+}
+
+// Ответ на остановку сессии
+message StopResponse {    
+    string message = 1;                 // Сообщение о результате
+}
+
+// Сервис обработки данных RTO
+service DataProcessingService {
+    // Функция получения статуса сервиса
+    rpc GetServiceStatus(ArgRequest) returns (ServiceStatus) {}
+
+    // Создает новую сессию оптимизации
+    rpc Start (StartRequest) returns (StartResponse);
+    
+    // Запускает или возобновляет оптимизацию
+    rpc StartOptimize (StartOptimizeRequest) returns (StartOptimizeResponse);
+    
+    // Ставит оптимизацию на паузу
+    rpc Pause (PauseRequest) returns (PauseResponse);
+    
+    // Останавливает и удаляет сессию
+    rpc Stop (StopRequest) returns (StopResponse);
+}
