@@ -208,8 +208,7 @@ class BaseOptimizer(object):
                  to_model_vec_size    : int,
                  from_model_vec_size  : int,
                  iter_limit           : int,
-                 seed                 : int = None,
-                 main_value_index     : int = 0
+                 seed                 : int = None
                  ) -> None:
         """
         __init__
@@ -231,7 +230,7 @@ class BaseOptimizer(object):
         """Размер выходного вектора параметров"""
         self._iteration_limitation : int = iter_limit
         """Ограничение по количеству итераций алгоритма"""
-        self._main_value_index     : int = main_value_index
+        self._main_value_index     : int = 1
         """Индекс целевого оптимизируемого параметра"""
         self._seed                 : int = time.time() if seed is None else seed
         """Используемая база генератора для псевдослучайных последовательностей"""
