@@ -1,9 +1,14 @@
-from BlackBoxOptimizer.BoxOptimizer import GaussOpt
+from BlackBoxOptimizer import GaussOpt
 from BlackBoxOptimizer import Optimizer
 
 import numpy as np
 from typing import Tuple
 
+from sklearn.gaussian_process.kernels import Matern
+
+import warnings
+
+warnings.filterwarnings('ignore')
 
 class BaseExternalModel:
     def __init__(self):
@@ -46,12 +51,12 @@ if __name__ == "__main__":
         optCls              = GaussOpt,
         seed                = 1546, # TODO: Проверить, точно ли работает. Сейчас выдаёт разные значения при одном seed
         to_model_vec_size   = 3,
-        from_model_vec_size = 2,
-        iter_limit          = 100
+        from_model_vec_size = 1,
+        iter_limit          = 100,
+        kernel = Matern(nu=2.5)
         )
 
     # Пример конфигурирования для конктретной реализации оптимизирущего класса
-    opt.configure(step = 0.01)
 
     target_point = np.array([0, 0.5, -0.2]) # Целевая точка, которую хотим увидеть, используется для отладки
     model = ModelMinSquareSum(target_point)
@@ -62,9 +67,6 @@ if __name__ == "__main__":
     print('История изменения рабочей точки')
     print(*currentOptimizer.history_to_opt_model_data)
     print(20*'=')
-    print('История вычисления внешней моделью черным ящиком')
-    print(currentOptimizer.history_from_model_data)
-    print(20 * '=')
     print(f'Число вызовов внешней модели - {model.get_call_count()}')
     print(20 * '=')
     print('Результат')

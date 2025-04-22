@@ -12,9 +12,9 @@ NOTE:
 
 # Импорт основного класса оптимизации
 from BlackBoxOptimizer import Optimizer
-from BlackBoxOptimizer.BoxOptimizer import GaussOpt
+from BlackBoxOptimizer import GaussOpt
 
-
+from sklearn.gaussian_process.kernels import Matern
 
 import numpy as np
 from typing import Tuple
@@ -49,14 +49,13 @@ if __name__ == "__main__":
     # Создать класс оптимизатора
     opt = Optimizer(
         optCls              = GaussOpt,
-        seed                = 1546, 
-        to_model_vec_size   = 21,
+        to_model_vec_size   = 3,
         from_model_vec_size = 3,
-        iter_limit          = 10
+        iter_limit          = 10,
+        kernel = Matern(nu=2.5)
         )
 
     # Пример конфигурирования для конктретной реализации оптимизирущего класса
-    opt.configure(seed = 24657)
 
     # Запуск оптимизации
     opt.modelOptimize(func = test_object_function_variant_B)
