@@ -1,0 +1,2 @@
+from .SinParabolaModel import SinParabolaModel
+
