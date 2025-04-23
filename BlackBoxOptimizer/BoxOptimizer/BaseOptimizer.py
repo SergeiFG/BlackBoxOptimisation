@@ -208,8 +208,7 @@ class BaseOptimizer(object):
                  to_model_vec_size    : int,
                  from_model_vec_size  : int,
                  iter_limit           : int,
-                 seed                 : int = None,
-                 main_value_index     : int = 0
+                 seed                 : int = None
                  ) -> None:
         """
         __init__
@@ -220,7 +219,6 @@ class BaseOptimizer(object):
             to_model_vec_size    : int - Размерность вектора принимаемого целевой моделью оптимизации
             from_model_vec_size  : int - Размерность вектора получаемого от целевой модели оптимизации
             iter_limit           : int - Ограничение по количеству доступных итераций работы алгоритма
-            main_value_index     : int - Индекс целевого оптимизируемого параметра
         """
 
         # Параметры генератора, доступные для перенастройки
@@ -228,11 +226,11 @@ class BaseOptimizer(object):
 
         self._to_model_vec_size    : int = to_model_vec_size
         """Размер входного вектора параметров"""
-        self._from_model_vec_size  : int = from_model_vec_size
+        self._from_model_vec_size  : int = from_model_vec_size + 1
         """Размер выходного вектора параметров"""
         self._iteration_limitation : int = iter_limit
         """Ограничение по количеству итераций алгоритма"""
-        self._main_value_index     : int = main_value_index
+        self._main_value_index     : int = 0
         """Индекс целевого оптимизируемого параметра"""
         self._seed                 : int = time.time() if seed is None else seed
         """Используемая база генератора для псевдослучайных последовательностей"""
@@ -255,6 +253,8 @@ class BaseOptimizer(object):
         # TODO: Добавить проверки атрибутов
         if key == "_to_model_vec_size":
             pass
+        if key == "_from_model_vec_size":
+            super().__setattr__(key, value+1)
         super().__setattr__(key, value)
 
 
