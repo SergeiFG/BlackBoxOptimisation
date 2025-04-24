@@ -14,7 +14,7 @@ from sklearn.gaussian_process import kernels
 from ..BaseOptimizer import BaseOptimizer, OptimizedVectorData
 
 class GaussOpt(BaseOptimizer):
-    def __init__(self, kernel: kernels, *args, **kwargs) -> None:
+    def __init__(self, kernel: kernels = kernels.Matern(nu=2.5), *args, **kwargs) -> None:
         """
         __init__
         ---
@@ -50,7 +50,7 @@ class GaussOpt(BaseOptimizer):
             ei = improvement * norm.cdf(Z) + sigma * norm.pdf(Z)
             ei[sigma.flatten() == 0.0] = 0.0
         return -float(ei[0, 0])
-    
+    """Функция максимального правдоподобия"""
 
     def _propose_location(self):
         y_opt = self.res_of_most_opt_vec
@@ -61,7 +61,7 @@ class GaussOpt(BaseOptimizer):
                     bounds=self.bound_of_vec,
                     seed=self._seed)
         return res.x
-    
+    """Функция высчитывающая следущую точку для подсчета"""
 
     def _bound_func_(self):
         info = np.iinfo(np.int64)
@@ -77,6 +77,9 @@ class GaussOpt(BaseOptimizer):
             bound = np.append(bound, to_attach, axis=0)
         bound = bound.reshape(self._to_model_vec_size,2)
         return bound
+    """Функция возращяющая массив минимумов и максимумов вида [[min1, max1],[min2, max2]]"""
+    #TODO: Кригинг или диффернциальная эволюция плохо воспринимают большие границы и выдают бредовые точки
+    # Однако при малых(близких) границах метод работает довольно хорошо
 
     def _init_vecs(self):
             if self._seed is not None:
@@ -87,6 +90,7 @@ class GaussOpt(BaseOptimizer):
             init_vecs = factors * first_vec
 
             return [first_vec] + [init_vecs[i] for i in range(init_vecs.shape[0])]
+    """Создание первой популяции векторов для нормальной работы метода, необходимо 10*количество MV"""
 
     def _main_calc_func(self, func: Callable[[np.ndarray], np.ndarray]):
         self.model.fit(self.history_to_opt_model_data,self.res_history_to_opt_model_data)
@@ -98,7 +102,15 @@ class GaussOpt(BaseOptimizer):
             max(candidate_vec, self.res_of_most_opt_vec)
             if self.target_to_opt else min(candidate_vec, self.res_of_most_opt_vec)
         )
-         
+    """Основная функция подсчета"""
+
+    def configure(self, **kwargs):
+        kernel = kwargs.pop('kernel', None)
+        super().configure(**kwargs)
+        if 'kernel' in kwargs:
+            self.model = GaussianProcessRegressor(kernel=kernel)
+    """Настройка метода"""
+
     def modelOptimize(self, func : Callable[[np.array], np.array]) -> None:
         self.history_to_opt_model_data = self._init_vecs()
         res_list = [func(vec)[0] for vec in self.history_to_opt_model_data]
@@ -111,12 +123,12 @@ class GaussOpt(BaseOptimizer):
             self.res_of_most_opt_vec = min(res_list)
         for _ in range(self._iteration_limitation):
             self._main_calc_func(func=func)
-        
+    """Функция инициализации и оптимизации"""
 
     def getResult(self):
         if self.target_to_opt:
             return self.history_to_opt_model_data[self.res_history_to_opt_model_data.index(max(self.res_history_to_opt_model_data))]
         else: 
             return self.history_to_opt_model_data[self.res_history_to_opt_model_data.index(min(self.res_history_to_opt_model_data))]
-    
+    """Функция результата, возращает точку"""
     
