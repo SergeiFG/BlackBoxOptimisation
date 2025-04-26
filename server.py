@@ -52,17 +52,20 @@ class OptimizationSession:
         with open(self.session_file, 'a') as f:
             f.write(log_msg)
 
-    def _run_external_optimization(self, initial_mvs):
+    def _run_external_optimization(self, initial_mvs=None):
         """Запускает внешний оптимизатор с учетом выбранного метода"""
         try:
-            # Подготовка параметров
+            # Берем только первую MV (в запросе заказчика она одна)
+            mv = self.session_data['MVs'][0]
+            
             params = {
                 'method': self.session_data['optimization_method'],
-                'to_model_vec_size': len(self.session_data['MVs']),
-                'from_model_vec_size': 2,
+                'to_model_vec_size': 1,  # Только одна переменная
                 'iter_limit': self.session_data['max_iterations'],
-                'initial_values': initial_mvs,
-                'method_params': self.session_data['method_config']['params']
+                'initial_values': [initial_mvs[0]] if initial_mvs else [0.0],
+                'objective_function': self.session_data['objective_function'],
+                'mv_ids': [mv.id],  # ID единственной MV
+                'bounds': [[mv.lower_bound, mv.upper_bound]]  # Границы для одной переменной
             }
             
             process = subprocess.Popen(
@@ -78,7 +81,6 @@ class OptimizationSession:
             
             stdout, stderr = process.communicate()
             
-            # Парсим вывод
             for line in stdout.split('\n'):
                 if line.startswith('FINAL_RESULT:'):
                     result = json.loads(line[13:])
@@ -92,7 +94,6 @@ class OptimizationSession:
         except Exception as e:
             self._log_event(f"Optimizer error: {str(e)}")
             raise
-
     def optimize(self, initial_mvs=None):
         """Метод оптимизации с защитой от ошибок кодировки"""
         self.status = "running"

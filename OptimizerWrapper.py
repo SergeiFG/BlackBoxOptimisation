@@ -2,100 +2,90 @@
 # -*- coding: utf-8 -*-
 import json
 import numpy as np
-from BlackBoxOptimizer import TestStepOpt, EvolutionaryOpt, Optimizer
-from Example import ModelMinSquareSum
+from BlackBoxOptimizer import TestStepOpt, Optimizer
 
-METHOD_CONFIGS = {
-    "GradientDescent": {
-        "opt_class": TestStepOpt,
-        "params": {"step": 0.01, "seed": 1546},
-        "eval_mode": "full"
-    },
-    "Evolutionary": {
-        "opt_class": EvolutionaryOpt,
-        "params": {
-            "population_size": 50,  # Увеличено с 30
-            "offspring_per_parent": 2,
-            "mutation_prob": 0.2,   # Уменьшено с 0.3
-            "sigma_init": 0.1,      # Уменьшено с 0.2
-            "seed": 42,
-            "t_max": 50,
-            "restarts": 3           # Добавлены рестарты
-        },
-        "eval_mode": "first"
-    }
-}
-
-def safe_evolutionary_run(opt, model, config, max_attempts=3):
-    for attempt in range(max_attempts):
+class CustomOptimizer:
+    def __init__(self, objective_function, mv_id, bounds, step, max_iter):
+        self.objective_function = objective_function
+        self.mv_id = mv_id
+        self.bounds = bounds
+        self.step = step
+        self.max_iter = max_iter
+        self.current_value = 0.0
+        self.iteration = 0
+        
+    def evaluate(self, x):
+        # Подставляем значение в целевую функцию
+        expr = self.objective_function.replace(f"[{self.mv_id}]", str(x[0]))
+        
         try:
-            opt.modelOptimize(func=lambda x: model.evaluate(x)[0])
-            return opt.getOptimizer()
-        except np.linalg.LinAlgError:
-            if attempt < max_attempts - 1:
-                # Увеличиваем разнообразие при рестарте
-                opt.configure(sigma_init=config['params']['sigma_init'] * 1.5)
-                continue
-            raise
+            value = eval(expr, {
+                'Pow': pow, 'pow': pow,
+                'sin': np.sin, 'cos': np.cos, 'tan': np.tan,
+                'exp': np.exp, 'sqrt': np.sqrt, 'log10': np.log10
+            })
+            return np.array([value])
+        except Exception as e:
+            raise ValueError(f"Evaluation error: {str(e)}")
+    
+    def optimize(self):
+        best_value = self.current_value
+        best_score = self.evaluate([best_value])[0]
+        
+        for _ in range(self.max_iter):
+            # Простейший градиентный спуск
+            current_score = self.evaluate([self.current_value])[0]
+            
+            # Пробуем шаг вправо
+            right_val = min(self.current_value + self.step, self.bounds[1])
+            right_score = self.evaluate([right_val])[0]
+            
+            # Пробуем шаг влево
+            left_val = max(self.current_value - self.step, self.bounds[0])
+            left_score = self.evaluate([left_val])[0]
+            
+            # Выбираем наилучшее направление
+            if right_score < left_score and right_score < current_score:
+                self.current_value = right_val
+                best_score = right_score
+            elif left_score < current_score:
+                self.current_value = left_val
+                best_score = left_score
+            
+            self.iteration += 1
+        
+        return [self.current_value]
 
 def run_optimization(params):
     try:
-        method = params['method']
-        config = METHOD_CONFIGS[method]
+        # Получаем параметры
+        mv_id = params['mv_ids'][0]
+        bounds = params['bounds'][0]
+        objective = params['objective_function']
         
-        # Автоподстройка параметров для Evolutionary
-        if method == "Evolutionary":
-            dim = params['to_model_vec_size']
-            config['params']['population_size'] = max(50, dim * 10)
-        
-        # Инициализация
-        target = np.zeros(params['to_model_vec_size'])
-        model = ModelMinSquareSum(target)
-        
-        # Создание оптимизатора
-        opt = Optimizer(
-            optCls=config['opt_class'],
-            seed=config['params']['seed'],
-            to_model_vec_size=params['to_model_vec_size'],
-            from_model_vec_size=2,
-            iter_limit=params['iter_limit'],
-            **({'dimension': params['to_model_vec_size']} if method == "Evolutionary" else {})
+        # Создаем и запускаем оптимизатор
+        optimizer = CustomOptimizer(
+            objective_function=objective,
+            mv_id=mv_id,
+            bounds=bounds,
+            step=0.01,  # Фиксированный шаг
+            max_iter=params['iter_limit']
         )
-
-        # Конфигурация
-        if method == "GradientDescent":
-            opt.configure(step=config['params']['step'])
-            def evaluate(x): return model.evaluate(x)
-        else:
-            for i in range(params['to_model_vec_size']):
-                opt.setVecItemLimit(i, "to_model", min=-1.0, max=1.0)
-            opt.configure(**{k: v for k, v in config['params'].items() 
-                         if k not in ['seed', 't_max', 'restarts']})
-
-        # Запуск
-        if method == "GradientDescent":
-            opt.modelOptimize(func=evaluate)
-            optimizer = opt.getOptimizer()
-            result = optimizer.getResult()
-        else:
-            optimizer = safe_evolutionary_run(opt, model, config)
-            result = optimizer._to_opt_model_data.vecs[:, 0]
-
-        # Форматирование результата
+        
+        # Получаем результат
+        result = optimizer.optimize()
+        
         output = {
-            "optimized_values": np.array(result).tolist(),
-            "call_count": model.get_call_count(),
-            "iterations_used": params['iter_limit'],
+            "optimized_values": result,
+            "iterations_used": optimizer.iteration,
             "status": "success"
         }
         print("FINAL_RESULT:" + json.dumps(output))
-
+    
     except Exception as e:
         print("ERROR:" + json.dumps({
             "error": str(e),
-            "status": "failed",
-            "method": method,
-            "attempt": getattr(optimizer, 'restart_attempt', 0) if 'optimizer' in locals() else 0
+            "status": "failed"
         }))
         exit(1)
 
