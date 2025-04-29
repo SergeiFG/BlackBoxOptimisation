@@ -21,20 +21,29 @@ class EvolutionaryOpt(BaseOptimizer):
         if 'dimension' in kwargs:
             self.dimension = kwargs['dimension']
 
-    def _get_bounds(self):
-        """Получаем ограничения из BaseOptimizer"""
-        lower = np.full(self._to_model_vec_size, -np.inf)
-        upper = np.full(self._to_model_vec_size, np.inf)
+    def _get_bounds(self, vec_dir: str):
+        """Получаем ограничения для указанного направления"""
+        vec_data = self._to_opt_model_data if vec_dir == "to_model" else self._from_model_data
+        size = self._to_model_vec_size if vec_dir == "to_model" else self._from_model_vec_size
         
-        for i in range(self._to_model_vec_size):
-            lower[i] = self._to_opt_model_data._vec[i, 0]  # min_index
-            upper[i] = self._to_opt_model_data._vec[i, 1]  # max_index
+        lower = np.full(size, -np.inf)
+        upper = np.full(size, np.inf)
+        
+        # Безопасный доступ к границам
+        for i in range(min(size, vec_data._vec.shape[0])):
+            lower[i] = vec_data._vec[i, 0]  # min_index
+            upper[i] = vec_data._vec[i, 1]  # max_index
             
         return lower, upper
 
     def modelOptimize(self, func: Callable[[np.ndarray], np.ndarray]) -> None:
-        # Получаем ограничения из BaseOptimizer
-        lower_bounds, upper_bounds = self._get_bounds()
+        # Получаем ограничения для входных и выходных переменных
+        input_lower, input_upper = self._get_bounds("to_model")
+        output_lower, output_upper = self._get_bounds("from_model")
+        
+        # Для выходных переменных исключаем целевую функцию (первый элемент)
+        output_lower = output_lower[1:] if len(output_lower) > 1 else []
+        output_upper = output_upper[1:] if len(output_upper) > 1 else []
         
         ep = EvolutionaryProgramming(
             func=func,
@@ -44,8 +53,10 @@ class EvolutionaryOpt(BaseOptimizer):
             mutation_prob=self.mutation_prob,
             sigma_init=self.sigma_init,
             t_max=self._iteration_limitation,
-            lower_bounds=lower_bounds,
-            upper_bounds=upper_bounds
+            lower_bounds=input_lower,
+            upper_bounds=input_upper,
+            output_lower_bounds=output_lower,
+            output_upper_bounds=output_upper
         )
         
         best_x, best_f = ep.run()
