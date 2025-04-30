@@ -3,100 +3,133 @@ import numpy as np
 from typing import Callable, Tuple, Optional
 from ..BaseOptimizer import BaseOptimizer, OptimizedVectorData
 
+from ..BaseOptimizer import BaseOptimizer
+import numpy as np
+from typing import Callable
+import math
+
 class SimulatedAnnealingOptimizer(BaseOptimizer):
-    def __init__(self,
-                 to_model_vec_size: int,
-                 from_model_vec_size: int,
-                 iter_limit: int,
-                 initial_temperature: float = 1000.0,
-                 cooling_rate: float = 0.99,
-                 seed: Optional[int] = None,
-                 **kwargs
-                 ) -> None:
-        
-        super().__init__(
-            to_model_vec_size=to_model_vec_size,
-            from_model_vec_size=from_model_vec_size,
-            iter_limit=iter_limit,
-            seed=seed
-        )
-        self._temperature = max(initial_temperature * 0.99, 0.01)
-        self._cooling_rate = cooling_rate
-        self._current_energy = None
-        self._best_vector = None
-        self._best_energy = None
-        self._current_vector = None
-        self._main_value_index = 0  
-    def _generate_neighbor(self) -> np.array:
-        """Генерация соседнего решения"""
-        current_vector = next(self._to_opt_model_data.iterVectors()).copy()
-        neighbor = current_vector + np.random.normal(
-            scale=0.1, 
-            size=len(current_vector))
-        
+    """
+    SimulatedAnnealingOptimizer
+    ---
+    Реализация алгоритма имитации отжига для оптимизации
+    """
     
-        for i in range(len(neighbor)):
-            min_val = self._to_opt_model_data._vec[i][OptimizedVectorData.min_index]
-            max_val = self._to_opt_model_data._vec[i][OptimizedVectorData.max_index]
-            neighbor[i] = np.clip(neighbor[i], min_val, max_val)
+    def __init__(self, 
+                 seed: int,
+                 initial_temp: float = 100.0,
+                 min_temp: float = 1e-3,
+                 cooling_rate: float = 0.95,
+                 step_size: float = 1.0,
+                 *args, **kwargs) -> None:
+        """
+        Конструктор класса оптимизатора
         
+        Аргументы:
+            seed: База генератора случайных чисел
+            initial_temp: Начальная температура
+            min_temp: Минимальная температура (критерий остановки)
+            cooling_rate: Скорость охлаждения
+            step_size: Начальный размер шага
+        """
+        super().__init__(*args, **kwargs)
+        
+        self.seed = seed
+        np.random.seed(seed)
+        
+        # Параметры алгоритма отжига
+        self.initial_temp = initial_temp
+        self.current_temp = initial_temp
+        self.min_temp = min_temp
+        self.cooling_rate = cooling_rate
+        self.step_size = step_size
+        
+        # История для отладки
+        self.history_to_opt_model_data = []
+        self.history_from_model_data = []
+        self.temperature_history = []
+        
+        # Лучшее найденное решение
+        self.best_solution = None
+        self.best_energy = float('inf')
+
+    def modelOptimize(self, func: Callable[[np.array], np.array]) -> None:
+        """
+        Запуск оптимизации через передачу функции черного ящика
+        """
+        # Инициализация начального решения
+        current_solution = next(self._to_opt_model_data.iterVectors()).copy()
+        current_energy = func(current_solution)[0]
+        
+        self.best_solution = current_solution.copy()
+        self.best_energy = current_energy
+        
+        for _ in range(self._iteration_limitation):
+            if self.current_temp <= self.min_temp:
+                break
+                
+            # Генерация нового решения
+            new_solution = self._generate_neighbor(current_solution)
+            
+            # Вычисление энергии нового решения
+            new_energy = func(new_solution)[0]
+            
+            # Принятие решения о переходе
+            if self._accept_solution(current_energy, new_energy):
+                current_solution = new_solution.copy()
+                current_energy = new_energy
+                
+                # Обновление лучшего решения
+                if new_energy < self.best_energy:
+                    self.best_solution = new_solution.copy()
+                    self.best_energy = new_energy
+            
+            # Сохранение истории
+            self._save_history(current_solution, current_energy)
+            
+            # Охлаждение
+            self.current_temp *= self.cooling_rate
+            self.temperature_history.append(self.current_temp)
+            
+            # Адаптация размера шага
+            self.step_size *= 0.99  # Постепенно уменьшаем шаг
+
+    def _generate_neighbor(self, solution: np.array) -> np.array:
+        """Генерация соседнего решения"""
+        neighbor = solution.copy()
+        
+        # Случайное изменение с нормальным распределением
+        perturbation = np.random.normal(scale=self.step_size, size=len(solution))
+        neighbor += perturbation
+        
+        # Проверка ограничений
+        for i in range(len(neighbor)):
+            min_val = self._to_opt_model_data._vec[i, OptimizedVectorData.min_index]
+            max_val = self._to_opt_model_data._vec[i, OptimizedVectorData.max_index]
+            
+            if min_val != -np.inf and neighbor[i] < min_val:
+                neighbor[i] = min_val
+            if max_val != np.inf and neighbor[i] > max_val:
+                neighbor[i] = max_val
+                
         return neighbor
 
-    def _accept_solution(self, new_energy: float) -> bool:
-        """Критерий принятия решения"""
-        if self._current_energy is None:
+    def _accept_solution(self, current_energy: float, new_energy: float) -> bool:
+        """Определение, принять ли новое решение"""
+        if new_energy < current_energy:
             return True
-            
-        if new_energy < self._current_energy:
-            return True
-            
- 
-        probability = math.exp(-(new_energy - self._current_energy) / self._temperature)
+        
+        # Вероятность принятия худшего решения
+        delta = new_energy - current_energy
+        probability = math.exp(-delta / self.current_temp)
+        
         return np.random.random() < probability
 
-    def _main_calc_func(self) -> None:
-        """Основная функция расчета одной итерации"""
+    def _save_history(self, solution: np.array, energy: float) -> None:
+        """Сохранение истории итераций"""
+        self.history_to_opt_model_data.append(solution.copy())
+        self.history_from_model_data.append(np.array([energy]))
 
-        if self._temperature < 1.0 and np.random.random() < 0.05:
-            self._temperature *= 2 
-        self._current_vector = next(self._to_opt_model_data.iterVectors())
-        self._current_energy = self._from_model_data._vec[self._main_value_index][OptimizedVectorData.values_index_start]
-
-
-        neighbor = self._generate_neighbor()
-        self._to_opt_model_data._vec[:, OptimizedVectorData.values_index_start] = neighbor
-
-        self._temperature *= self._cooling_rate
-
-    def modelOptimize(self, func: Callable[[np.array], np.array]) -> Tuple[np.array, float]:
-        """Основной метод оптимизации"""
-        for _ in range(self._iteration_limitation):
-            current_vector = next(self._to_opt_model_data.iterVectors())
-            result = func(current_vector)
-            self._from_model_data._vec[:, OptimizedVectorData.values_index_start] = result
-
-            current_energy = result[self._main_value_index]
-            
-            if self._best_energy is None or current_energy < self._best_energy:
-                self._best_energy = current_energy
-                self._best_vector = current_vector.copy()
-
-            self._main_calc_func()
-
-        return self.getResult()
-
-    def getResult(self) -> Tuple[np.array, float]:
-        """Возвращает лучшее найденное решение и его значение"""
-        if self._best_vector is None:
-            current_vector = next(self._to_opt_model_data.iterVectors())
-            return current_vector, self._from_model_data._vec[self._main_value_index][OptimizedVectorData.values_index_start]
-        return self._best_vector, self._best_energy
-
-    def reset(self) -> None:
-        """Сброс состояния оптимизатора"""
-        super().reset()
-        self._temperature = self._initial_temperature
-        self._current_energy = None
-        self._best_vector = None
-        self._best_energy = None
-        self._current_vector = None
+    def getResult(self) -> np.array:
+        """Возвращает лучшее найденное решение"""
+        return self.best_solution

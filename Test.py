@@ -3,35 +3,43 @@ from Models import SquareSumModel
 import numpy as np
 from BlackBoxOptimizer import SimulatedAnnealingOptimizer
 
-if __name__ == "__main__":
-    target_point = np.array([0, 0.5, -0.2])
+def test_simulated_annealing():
+    target_point = np.array([7, 5, 5])  
     model = SquareSumModel(-target_point)
-
+    
+    print(f"Истинный оптимум: {target_point}")
+    print(f"Минимальное значение функции: {model.func(target_point):.4f}\n")
+    
     opt = Optimizer(
         optCls=SimulatedAnnealingOptimizer,
-        seed=1546,
+        seed=42,
         to_model_vec_size=3,
         from_model_vec_size=1,
-        iter_limit=1000,
+        iter_limit=2000, 
         external_model=model.evaluate,
         optimisation_type=OptimisationTypes.minimize,
-        initial_temperature=100.0,
-        cooling_rate=0.99,
-        temperature_min=0.1
+        initial_temp=100.0,  
+        min_temp=1e-8,       
+        cooling_rate=0.95,   
+        step_size=1.0        
     )
-
-
-    opt.setVecItemLimit(0, min=-10.0, max=10.0)  
-    opt.setVecItemLimit(1, min=-10.0, max=10.0)  
-    opt.setVecItemLimit(2, min=-10.0, max=10.0) 
-
-
+    
+    opt.setVecItemLimit(0, min=-10, max=10)
+    opt.setVecItemLimit(1, min=-10, max=10)
+    opt.setVecItemLimit(2, min=-10, max=10)
+    
     opt.modelOptimize()
     
+
     result = opt.getResult()
-    print('\nРезультат оптимизации:')
-    print(f"Найденная точка: {result[0]}")
-    print(f"Значение функции: {result[1]:.6f}")
-    print(f"Истинный оптимум: {target_point}")
-    print(f"Расстояние до оптимума: {np.linalg.norm(result[0] - target_point):.6f}")
-    print(f"Число итераций: {opt.get_usage_count()}")
+    final_value = model.evaluate(result)[0]
+    calls_count = opt.get_usage_count()
+    
+    print("\nРезультаты оптимизации:")
+    print(f"Найденное решение: {result}")
+    print(f"Значение функции: {final_value:.6f}")
+    print(f"Число вызовов модели: {calls_count}")
+    
+
+if __name__ == "__main__":
+    test_simulated_annealing()
