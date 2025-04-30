@@ -110,10 +110,12 @@ class SimulatedAnnealingOptimizer(BaseOptimizer):
         if new_energy < current_energy:
             return True
         
-        # Вероятность принятия худшего решения
         delta = new_energy - current_energy
-        probability = math.exp(-delta / self.current_temp)
+        if delta <= 0:
+            return True
         
+        # Вероятность принятия худшего решения
+        probability = math.exp(-delta / self.current_temp)
         return np.random.random() < probability
 
     def _save_history(self, solution: np.array, energy: float) -> None:

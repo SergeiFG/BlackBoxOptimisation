@@ -4,7 +4,7 @@ import numpy as np
 from BlackBoxOptimizer import SimulatedAnnealingOptimizer
 
 def test_simulated_annealing():
-    target_point = np.array([7, 5, 5])  
+    target_point = np.array([100, 20, 60])  
     model = SquareSumModel(-target_point)
     
     print(f"Истинный оптимум: {target_point}")
@@ -15,18 +15,18 @@ def test_simulated_annealing():
         seed=42,
         to_model_vec_size=3,
         from_model_vec_size=1,
-        iter_limit=2000, 
+        iter_limit=15000, 
         external_model=model.evaluate,
         optimisation_type=OptimisationTypes.minimize,
-        initial_temp=100.0,  
-        min_temp=1e-20,       
-        cooling_rate=0.95,   
-        step_size=1.0        
+        initial_temp=1.0,  
+        min_temp=1e-12,       
+        cooling_rate=0.99,   
+        step_size=10.0        
     )
     
-    opt.setVecItemLimit(0, min=-200, max=100)
-    opt.setVecItemLimit(1, min=-200, max=100)
-    opt.setVecItemLimit(2, min=-200, max=100)
+    opt.setVecItemLimit(0, min=-10, max=2000)
+    opt.setVecItemLimit(1, min=-10, max=5000)
+    opt.setVecItemLimit(2, min=-10, max=7000)
     
     opt.modelOptimize()
     
