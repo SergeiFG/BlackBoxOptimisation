@@ -22,16 +22,7 @@ class SimulatedAnnealingOptimizer(BaseOptimizer):
                  cooling_rate: float = 0.95,
                  step_size: float = 1.0,
                  *args, **kwargs) -> None:
-        """
-        Конструктор класса оптимизатора
         
-        Аргументы:
-            seed: База генератора случайных чисел
-            initial_temp: Начальная температура
-            min_temp: Минимальная температура (критерий остановки)
-            cooling_rate: Скорость охлаждения
-            step_size: Начальный размер шага
-        """
         super().__init__(*args, **kwargs)
         
         self.seed = seed
@@ -92,7 +83,7 @@ class SimulatedAnnealingOptimizer(BaseOptimizer):
             self.temperature_history.append(self.current_temp)
             
             # Адаптация размера шага
-            self.step_size *= 0.99  # Постепенно уменьшаем шаг
+            self.step_size *= 0.99 
 
     def _generate_neighbor(self, solution: np.array) -> np.array:
         """Генерация соседнего решения"""
