@@ -20,8 +20,8 @@ class SquareSumModel(BaseModel):
 
         super().__init__(**kwargs)
 
-        self.true_optimum = target
-        self.func = lambda x: np.sum((x - target) ** 2)
+        self.true_optimum = -target
+        self.func = lambda x: np.sum((x + target) ** 2)
 
     def evaluate(self, to_vec: np.ndarray) -> np.ndarray:
         """
