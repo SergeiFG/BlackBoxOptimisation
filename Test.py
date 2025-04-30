@@ -39,6 +39,7 @@ def test_simulated_annealing():
     print(f"Найденное решение: {result}")
     print(f"Значение функции: {final_value:.6f}")
     print(f"Число вызовов модели: {calls_count}")
+    print(f"Отклонения от значения функции: {(final_value - model.func(target_point)):.6f}")
     
 
 if __name__ == "__main__":
