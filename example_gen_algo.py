@@ -3,6 +3,7 @@ from BlackBoxOptimizer.BoxOptimizer.Genetic_Algo import Genetic_Algo
 from Example import ModelMinSquareSum
 import numpy as np
 
+
 class Genetic_Algo_Test:
     def __init__(self):
         # Целевая точка и параметры

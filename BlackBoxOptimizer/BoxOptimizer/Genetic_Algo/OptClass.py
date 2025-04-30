@@ -1,4 +1,5 @@
 import numpy as np
+import time
 
 class GeneticAlgorithmOptimizer:
     def __init__(self, func, dimension=5, population_size=100, generations=150,
@@ -59,9 +60,30 @@ class GeneticAlgorithmOptimizer:
         decay_rate = np.log(self.init_mutation/self.min_mutation) / self.generations
         return self.init_mutation * np.exp(-decay_rate * generation)
     
-    def _evaluate(self, population):
-        """Оценка популяции"""
-        return np.array([self.func(ind) for ind in population])
+    # def _evaluate(self, population):
+    #     """Оценка популяции"""
+    #     return np.array([self.func(ind) for ind in population])
+    
+    def _evaluate(self, population, ask_time=100):
+
+        """Оценка популяции.
+        
+        Если self.func возвращает None (функция "на паузе"), 
+        метод продолжает опрашивать её каждые ask_time миллисекунд,
+        пока не получит результат.
+        """
+
+        fitness_values = []
+        
+        for ind in population:
+            while True:
+                fitness = self.func(ind)
+                if fitness is not None:
+                    fitness_values.append(fitness)
+                    break
+                time.sleep(ask_time / 1000)  # Переводим мс в секунды
+        
+        return np.array(fitness_values)
     
     def _selection(self, population, fitness, num_parents):
         """Рулеточный отбор с учетом минимизации"""
