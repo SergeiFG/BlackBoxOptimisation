@@ -68,7 +68,7 @@ class _vectorItemProperties(object):
         self._max = new_val
 
 
-    def randCreate():
+    def randCreate(self):
         """
         randCreate
         ----
@@ -318,7 +318,7 @@ class OptimizedVectorData(object):
         """
         setVectorRandVal
         ---
-        TODO: Получение начального вектора с величинами в диапазонах допустимого минимума и максимума 
+        Получение начального вектора с величинами в диапазонах допустимого минимума и максимума 
         по нормальному распределению 
         """
         random.seed(int(self._seed))
@@ -414,7 +414,7 @@ class BaseOptimizer(object):
         """Используемая база генератора для псевдослучайных последовательностей"""
 
         self._init_param()
-
+        self._init_model_vecs()
         # Внутренние общие параметры генератора
         # ==========================================================================================
         self._historical_data_container : list = []
@@ -464,6 +464,16 @@ class BaseOptimizer(object):
         """Число векторов кандидатов для получения решения. По умолчанию 1. Изменяется в зависимости
         от реализации."""
 
+
+
+    def _init_model_vecs(self) -> None:
+        """
+        _init_to_model_vec
+        ---
+        Внутренний метод инициализации выходного вектора _to_opt_model_vec
+        
+        Выполняет наполнение выходного массива.
+        """
         self._to_opt_model_data : OptimizedVectorData = OptimizedVectorData(
             vec_size            = self._to_model_vec_size,
             vec_candidates_size = self._vec_candidates_size,
@@ -477,20 +487,8 @@ class BaseOptimizer(object):
             seed                = self._seed
             )
         """Входной вектор, получаемый от модели оптимизации"""
-
-        self._init_to_model_vec()
-
-
-
-    def _init_to_model_vec(self) -> None:
-        """
-        _init_to_model_vec
-        ---
-        Внутренний метод инициализации выходного вектора _to_opt_model_vec
         
-        Выполняет наполнение выходного массива.
-        """
-        self._to_opt_model_data.setVectorsRandVal(0.0, 1.0)
+        self._to_opt_model_data.setVectorRandValByLimits()
 
 
 
@@ -642,6 +640,23 @@ class BaseOptimizer(object):
             self._to_opt_model_data.setVecItemType(index = index, new_type = new_type, *args, **kwargs)
         elif vec_dir == "from_model":
             self._from_model_data.setVecItemType(index = index, new_type = new_type, *args, **kwargs)
+        else:
+            ...
+
+
+    def setPreSetCadidateVec(self, 
+                            candidate_index : int,
+                            vec : np.ndarray,
+                            vec_dir : Literal["to_model", "from_model"] = "to_model") -> None:
+        """
+        setPreSetCadidateVec
+        ---
+        Установка значений вектора кандидата по номеру кандидата
+        """
+        if vec_dir == "to_model":
+            self._to_opt_model_data.setPreSetCadidateVec(candidate_index = candidate_index, vec = vec)
+        elif vec_dir == "from_model":
+            self._from_model_data.setPreSetCadidateVec(candidate_index = candidate_index, vec = vec)
         else:
             ...
 
