@@ -5,7 +5,6 @@ import numpy as np
 
 from Models import SquareSumModel
 
-from sklearn.gaussian_process.kernels import Matern
 
 import warnings
 
@@ -20,10 +19,10 @@ if __name__ == "__main__":
     # Создать класс оптимизатора
     opt = Optimizer(
         optCls              = GaussOpt,
-        seed                = 1546, # TODO: Проверить, точно ли работает. Сейчас выдаёт разные значения при одном seed
+        seed                = 156, # TODO: Проверить, точно ли работает. Сейчас выдаёт разные значения при одном seed
         to_model_vec_size   = 3,
         from_model_vec_size = 1,
-        iter_limit          = 10,
+        iter_limit          = 100,
         external_model = model.evaluate,
         # user_function = lambda x: x[0],
         optimisation_type = OptimisationTypes.minimize,
@@ -31,7 +30,7 @@ if __name__ == "__main__":
         )
 
     # Пример конфигурирования для конктретной реализации оптимизирущего класса
-    opt.configure(kernel = Matern(nu=2))
+    opt.configure(kernel_cfg=('RBF',{}))
     # Запуск оптимизации
     opt.modelOptimize()
     currentOptimizer = opt.getOptimizer()

@@ -5,22 +5,27 @@ from typing import Callable
 import sys
 
 from scipy.stats import norm
-from scipy.optimize import differential_evolution
+from scipy.optimize import differential_evolution, minimize
 from sklearn.gaussian_process import GaussianProcessRegressor
-from sklearn.gaussian_process import kernels
-
+from sklearn.preprocessing import StandardScaler
 
 
 from ..BaseOptimizer import BaseOptimizer, OptimizedVectorData
 
 class GaussOpt(BaseOptimizer):
-    def __init__(self, kernel: kernels = kernels.Matern(nu=2.5), *args, **kwargs) -> None:
+    def __init__(self, kernel_cfg: tuple[str, dict] = ('Matern', {'nu': 2.5}), *args, **kwargs) -> None:
         """
         __init__
         ---
         Конструктор класса оптимизатора
         """
         super().__init__(*args, **kwargs)
+
+        # Динамически подгружаем нужное ядро
+        kernel_name, kernel_params = kernel_cfg
+        module = __import__('sklearn.gaussian_process.kernels', fromlist=[''])
+        kernel_cls = getattr(module, kernel_name)
+        kernel = kernel_cls(**kernel_params)
 
         self.model = GaussianProcessRegressor(kernel=kernel)
         """Модель кригинга, суррогатная модель"""
@@ -32,8 +37,12 @@ class GaussOpt(BaseOptimizer):
         """Цель оптимизации False-минимум True-максимум"""
         self.res_of_most_opt_vec : float = 0.0
         """Возрат наилучшего вектора, кандидат на min/max значение функции"""
+        self.most_opt_vec = []
+        """Кандидат на самый оптимальный вектор"""
         self.bound_of_vec = self._bound_func_()
         """Ограничения параметров векторов в виде массива"""
+        self.scaler = StandardScaler()
+        """Нормализация"""
 
     
     @staticmethod
@@ -56,10 +65,12 @@ class GaussOpt(BaseOptimizer):
         y_opt = self.res_of_most_opt_vec
         maximize = self.target_to_opt
         func = lambda x: self._expected_improvement(x, self.model, y_opt, maximize)
-        res = differential_evolution(
-                    func=func, 
-                    bounds=self.bound_of_vec,
-                    seed=self._seed)
+        res = minimize(fun=func,
+                       bounds=self.bound_of_vec,
+                       x0=self.most_opt_vec,
+                       method='BFGS',
+                       tol=1e-6
+                       )
         return res.x
     """Функция высчитывающая следущую точку для подсчета"""
 
@@ -70,23 +81,21 @@ class GaussOpt(BaseOptimizer):
             min_v = min_vec.copy()
             max_v = max_vec.copy()
             if min_vec == -np.inf:
-                min_v = -1
+                min_v = info.min
             if max_vec == np.inf:
-                max_v = 1
+                max_v = info.max
             to_attach = (min_v, max_v)
             bound = np.append(bound, to_attach, axis=0)
         bound = bound.reshape(self._to_model_vec_size,2)
         return bound
-    """Функция возращяющая массив минимумов и максимумов вида [[min1, max1],[min2, max2]]"""
-    #TODO: Кригинг или диффернциальная эволюция плохо воспринимают большие границы и выдают бредовые точки
-    # Однако при малых(близких) границах метод работает довольно хорошо
+    """Функция возращяющая массив минимумов и максимумов вида [[min1, max1],[min2, max2]...]"""
 
-    def _init_vecs(self):
+    def _init_vecs(self,population):
             if self._seed is not None:
                 np.random.seed(self._seed)
             first_vec = np.array(self._to_opt_model_data._vec[:,OptimizedVectorData.values_index_start].copy())
             length = first_vec.shape[0]
-            factors = np.random.uniform(0.5,2, size=(self._to_model_vec_size*10,length))
+            factors = np.random.uniform(-2,2, size=(self._to_model_vec_size*population,length))
             init_vecs = factors * first_vec
 
             return [first_vec] + [init_vecs[i] for i in range(init_vecs.shape[0])]
@@ -98,31 +107,47 @@ class GaussOpt(BaseOptimizer):
         self.history_to_opt_model_data.append(next_x.copy())
         candidate_vec = func(next_x.copy())[0]
         self.res_history_to_opt_model_data.append(candidate_vec)
-        self.res_of_most_opt_vec = (
-            max(candidate_vec, self.res_of_most_opt_vec)
-            if self.target_to_opt else min(candidate_vec, self.res_of_most_opt_vec)
-        )
+        if self.target_to_opt:
+            self.res_of_most_opt_vec = max(candidate_vec, self.res_of_most_opt_vec)
+        else:
+            self.res_of_most_opt_vec = min(candidate_vec, self.res_of_most_opt_vec)
+        
+        self.most_opt_vec = self.history_to_opt_model_data[self.res_history_to_opt_model_data.index(self.res_of_most_opt_vec)]
+        
     """Основная функция подсчета"""
 
     def configure(self, **kwargs):
-        kernel = kwargs.pop('kernel', None)
+        kernel_cfg = kwargs.pop('kernel_cfg', None)
+
         super().configure(**kwargs)
-        if 'kernel' in kwargs:
+
+        if kernel_cfg is not None:
+            kernel_name, kernel_params = kernel_cfg
+
+            module = __import__('sklearn.gaussian_process.kernels', fromlist=[''])
+            kernel_cls = getattr(module, kernel_name)
+
+            kernel = kernel_cls(**kernel_params)
+
             self.model = GaussianProcessRegressor(kernel=kernel)
     """Настройка метода"""
 
     def modelOptimize(self, func : Callable[[np.array], np.array]) -> None:
-        self.history_to_opt_model_data = self._init_vecs()
+        self.history_to_opt_model_data = self._init_vecs(10)
         res_list = [func(vec)[0] for vec in self.history_to_opt_model_data]
-        print(self.bound_of_vec)
         self.res_history_to_opt_model_data = res_list
         
         if self.target_to_opt:
             self.res_of_most_opt_vec = max(res_list)
         else:
             self.res_of_most_opt_vec = min(res_list)
+
+        self.most_opt_vec = self.history_to_opt_model_data[self.res_history_to_opt_model_data.index(self.res_of_most_opt_vec)]
+
         for _ in range(self._iteration_limitation):
+            self.bound_of_vec = self._bound_func_()
             self._main_calc_func(func=func)
+            
     """Функция инициализации и оптимизации"""
 
     def getResult(self):
