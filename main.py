@@ -14,7 +14,6 @@ NOTE:
 from BlackBoxOptimizer import Optimizer
 from BlackBoxOptimizer import GaussOpt
 
-from sklearn.gaussian_process.kernels import Matern
 
 import numpy as np
 from typing import Tuple
@@ -52,7 +51,6 @@ if __name__ == "__main__":
         to_model_vec_size   = 3,
         from_model_vec_size = 3,
         iter_limit          = 10,
-        kernel = Matern(nu=2.5)
         )
 
     # Пример конфигурирования для конктретной реализации оптимизирущего класса
