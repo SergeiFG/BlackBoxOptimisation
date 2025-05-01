@@ -356,6 +356,16 @@ class OptimizedVectorData(object):
         return loc_matrix
 
 
+    def setPreSetCadidateVec(self, candidate_index : int, vec : np.ndarray) -> None:
+        """
+        setPreSetCadidateVec
+        ---
+        Установка значений вектора кандидата по номеру кандидата
+        """
+        # TODO: Подумать над дополнительными провераками
+        self._vec[:, OptimizedVectorData.values_index_start + candidate_index] = vec
+
+
     def __str__(self):
         """
         Текстовое представление текущего вектора элементов
@@ -629,9 +639,9 @@ class BaseOptimizer(object):
         Установка ограничения для параметра внутри вектора
         """
         if vec_dir == "to_model":
-            self._to_opt_model_data.setVecItemType(index = index, *args, **kwargs)
+            self._to_opt_model_data.setVecItemType(index = index, new_type = new_type, *args, **kwargs)
         elif vec_dir == "from_model":
-            self._from_model_data.setVecItemType(index = index, *args, **kwargs)
+            self._from_model_data.setVecItemType(index = index, new_type = new_type, *args, **kwargs)
         else:
             ...
 
@@ -648,21 +658,27 @@ if __name__ == "__main__":
     # print(test_floatItem.isCorrect(123))
     # print(test_floatItem.isCorrect("Э"))
 
+    # test_OptimizedVectorData = OptimizedVectorData(vec_size = 12, vec_candidates_size = 5, seed = time.time())
+    # print("Initial")
+    # test_OptimizedVectorData.DEBUG_printInfo()
+    # test_OptimizedVectorData.setVecItemType(new_type="bool", index = 3)
+    # test_OptimizedVectorData.setVecItemType(new_type="bool", index = 8)
+    # test_OptimizedVectorData.setVecItemType(new_type="bool", index = 9)
+    # test_OptimizedVectorData.setLimitation(index= 3, min = 45, max = 75)
+    # test_OptimizedVectorData.setLimitation(index= 4, min = 45, max = 75)
+    # # test_OptimizedVectorData.setLimitation(index= 5, min = 485, max = 75)
+    # test_OptimizedVectorData.DEBUG_printInfo()
+    # test_OptimizedVectorData.setVectorRandValByLimits()
+    # test_OptimizedVectorData.DEBUG_printInfo()
+    
+    # print(test_OptimizedVectorData.getInLimitsMatrix())
+    # test_OptimizedVectorData._vec[3, 3] = 8
+    # test_OptimizedVectorData.DEBUG_printInfo()
+    # print(test_OptimizedVectorData.getInLimitsMatrix())
+    
     test_OptimizedVectorData = OptimizedVectorData(vec_size = 12, vec_candidates_size = 5, seed = time.time())
-    print("Initial")
-    test_OptimizedVectorData.DEBUG_printInfo()
-    test_OptimizedVectorData.setVecItemType(new_type="bool", index = 3)
-    test_OptimizedVectorData.setVecItemType(new_type="bool", index = 8)
-    test_OptimizedVectorData.setVecItemType(new_type="bool", index = 9)
-    test_OptimizedVectorData.setLimitation(index= 3, min = 45, max = 75)
-    test_OptimizedVectorData.setLimitation(index= 4, min = 45, max = 75)
-    # test_OptimizedVectorData.setLimitation(index= 5, min = 485, max = 75)
-    test_OptimizedVectorData.DEBUG_printInfo()
     test_OptimizedVectorData.setVectorRandValByLimits()
     test_OptimizedVectorData.DEBUG_printInfo()
-    
-    print(test_OptimizedVectorData.getInLimitsMatrix())
-    test_OptimizedVectorData._vec[3, 3] = 8
+    test_OptimizedVectorData.setPreSetCadidateVec(3, np.array(np.zeros(shape = 12)))
     test_OptimizedVectorData.DEBUG_printInfo()
-    print(test_OptimizedVectorData.getInLimitsMatrix())
     pass
