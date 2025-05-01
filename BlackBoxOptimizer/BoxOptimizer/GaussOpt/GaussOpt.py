@@ -5,7 +5,7 @@ from typing import Callable
 import sys
 
 from scipy.stats import norm
-from scipy.optimize import differential_evolution, minimize
+from scipy.optimize import minimize
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.preprocessing import StandardScaler
 
