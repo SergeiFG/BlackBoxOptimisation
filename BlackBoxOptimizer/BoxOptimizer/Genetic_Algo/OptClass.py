@@ -4,20 +4,23 @@ import time
 class GeneticAlgorithmOptimizer:
     def __init__(self, func, dimension=5, population_size=100, generations=150,
                  init_mutation=0.5, min_mutation=0.2, elite_size=5,
-                 lower_bounds=None, upper_bounds=None):
+                 lower_bounds=None, upper_bounds=None,
+                 output_lower_bounds=None, output_upper_bounds=None):
         """
         Инициализация генетического алгоритма для оптимизации.
         
         Параметры:
-        func - целевая функция для минимизации
+        func - целевая функция для минимизации (должна возвращать массив: [fitness, output1, output2, ...])
         dimension - размерность задачи
         population_size - размер популяции
         generations - количество поколений
         init_mutation - начальная вероятность мутации
         min_mutation - минимальная вероятность мутации
         elite_size - количество элитных особей
-        lower_bounds - нижние границы параметров
-        upper_bounds - верхние границы параметров
+        lower_bounds - нижние границы входных параметров
+        upper_bounds - верхние границы входных параметров
+        output_lower_bounds - нижние границы выходных параметров
+        output_upper_bounds - верхние границы выходных параметров
         """
         self.func = func
         self.dimension = dimension
@@ -27,7 +30,7 @@ class GeneticAlgorithmOptimizer:
         self.min_mutation = min_mutation
         self.elite_size = elite_size
         
-        # Установка границ параметров
+        # Установка границ входных параметров
         if lower_bounds is None:
             self.lower_bounds = np.full(dimension, -np.inf)
         else:
@@ -38,6 +41,10 @@ class GeneticAlgorithmOptimizer:
         else:
             self.upper_bounds = np.array(upper_bounds)
             
+        # Установка границ выходных параметров
+        self.output_lower_bounds = np.array([]) if output_lower_bounds is None else np.array(output_lower_bounds)
+        self.output_upper_bounds = np.array([]) if output_upper_bounds is None else np.array(output_upper_bounds)
+            
         # Проверка корректности границ
         if len(self.lower_bounds) != dimension or len(self.upper_bounds) != dimension:
             raise ValueError("Количество границ должно совпадать с размерностью")
@@ -46,6 +53,7 @@ class GeneticAlgorithmOptimizer:
         self.best_fitness_history = []
         self.avg_fitness_history = []
         self.mutation_rates = []
+        self.output_values_history = []  # Для хранения истории выходных параметров
         
     def _initialize_population(self):
         """Инициализация популяции с учетом границ параметров"""
@@ -60,30 +68,58 @@ class GeneticAlgorithmOptimizer:
         decay_rate = np.log(self.init_mutation/self.min_mutation) / self.generations
         return self.init_mutation * np.exp(-decay_rate * generation)
     
-    # def _evaluate(self, population):
-    #     """Оценка популяции"""
-    #     return np.array([self.func(ind) for ind in population])
+    def _check_output_constraints(self, output_values):
+        """Проверка ограничений выходных переменных"""
+        if len(output_values) <= 1:  # Только целевая функция
+            return True
+            
+        # Проверяем только те параметры, для которых заданы ограничения
+        num_output_params = min(len(self.output_lower_bounds), len(output_values)-1)
+        
+        for i in range(num_output_params):
+            if (output_values[i+1] < self.output_lower_bounds[i] or 
+                output_values[i+1] > self.output_upper_bounds[i]):
+                return False
+        return True
+    
+    def _penalize_fitness(self, fitness, output_values):
+        """Штрафование fitness при нарушении ограничений выходных переменных"""
+        penalty = 0
+        output_params = output_values[1:] if len(output_values) > 1 else []
+        
+        for i in range(min(len(output_params), len(self.output_lower_bounds))):
+            if not np.isinf(self.output_lower_bounds[i]):
+                penalty += max(self.output_lower_bounds[i] - output_params[i], 0)**2
+                
+        for i in range(min(len(output_params), len(self.output_upper_bounds))):
+            if not np.isinf(self.output_upper_bounds[i]):
+                penalty += max(output_params[i] - self.output_upper_bounds[i], 0)**2
+                
+        return fitness + 1e6 * penalty
     
     def _evaluate(self, population, ask_time=100):
-
-        """Оценка популяции.
-        
-        Если self.func возвращает None (функция "на паузе"), 
-        метод продолжает опрашивать её каждые ask_time миллисекунд,
-        пока не получит результат.
-        """
-
+        """Оценка популяции с учетом ограничений на выходные параметры"""
         fitness_values = []
+        output_values_list = []
         
         for ind in population:
             while True:
-                fitness = self.func(ind)
-                if fitness is not None:
+                result = self.func(ind)
+                if result is not None:
+                    # Первый элемент - fitness, остальные - выходные параметры
+                    output_values = np.array(result)
+                    fitness = output_values[0]
+                    
+                    # Проверка ограничений и применение штрафов
+                    if not self._check_output_constraints(output_values):
+                        fitness = self._penalize_fitness(fitness, output_values)
+                    
                     fitness_values.append(fitness)
+                    output_values_list.append(output_values)
                     break
-                time.sleep(ask_time / 1000)  # Переводим мс в секунды
+                time.sleep(ask_time / 1000)
         
-        return np.array(fitness_values)
+        return np.array(fitness_values), np.array(output_values_list)
     
     def _selection(self, population, fitness, num_parents):
         """Рулеточный отбор с учетом минимизации"""
@@ -174,7 +210,7 @@ class GeneticAlgorithmOptimizer:
         population = self._initialize_population()
         
         for gen in range(self.generations):
-            fitness = self._evaluate(population)
+            fitness, output_values = self._evaluate(population)
             current_mutation = self._get_current_mutation_rate(gen)
             self.mutation_rates.append(current_mutation)
             
@@ -183,6 +219,10 @@ class GeneticAlgorithmOptimizer:
             avg_fitness = np.mean(fitness)
             self.best_fitness_history.append(best_fitness)
             self.avg_fitness_history.append(avg_fitness)
+            
+            # Сохраняем выходные параметры лучшей особи
+            best_idx = np.argmin(fitness)
+            self.output_values_history.append(output_values[best_idx])
             
             # Элитизм
             elite_indices = np.argsort(fitness)[:self.elite_size]
@@ -199,56 +239,10 @@ class GeneticAlgorithmOptimizer:
             
 
         # Получение лучшего решения
-        final_fitness = self._evaluate(population)
+        final_fitness, final_output_values = self._evaluate(population)
         best_idx = np.argmin(final_fitness)
         self.best_solution = population[best_idx]
         self.best_fitness = final_fitness[best_idx]
+        self.best_output_values = final_output_values[best_idx]
         
-        return self.best_solution, self.best_fitness
-    
-
-
-# # Пример использования:
-# if __name__ == "__main__":
-#     # Определение целевой функции (как в исходном коде)
-#     def target_function(x):
-#         result = 0
-        
-#         # Шумовая компонента
-#         result += np.sum( (x-1.273)**2 )
-        
-#         return result
-
-#     # Границы параметров
-#     param_bounds = [
-#         (-5.0, 5.0),    # Параметр 1
-#         (-3.0, 3.0),     # Параметр 2
-#         (0.0, 10.0),     # Параметр 3
-#         (-1.0, 1.0),     # Параметр 4
-#         (-10.0, 0.0)     # Параметр 5
-#     ]
-    
-#     lower_bounds = [b[0] for b in param_bounds]
-#     upper_bounds = [b[1] for b in param_bounds]
-
-#     # Создание и запуск оптимизатора
-#     ga = GeneticAlgorithmOptimizer(
-#         func=target_function,
-#         dimension=5,
-#         population_size=300,
-#         generations=100,
-#         init_mutation=0.5,
-#         min_mutation=0.0001,
-#         elite_size=10,
-#         lower_bounds=lower_bounds,
-#         upper_bounds=upper_bounds
-#     )
-    
-#     best_solution, best_fitness = ga.run()
-    
-#     # Вывод результатов
-#     print("\nЛучшее найденное решение:")
-#     print("Параметр |   Значение   | Границы")
-#     for i, (val, low, high) in enumerate(zip(best_solution, lower_bounds, upper_bounds)):
-#         print(f"{i+1:7d} | {val:12.6f} | [{low:5.1f}, {high:5.1f}]")
-#     print(f"\nЗначение функции: {best_fitness:.6f}")
+        return self.best_solution, self.best_fitness, self.best_output_values
