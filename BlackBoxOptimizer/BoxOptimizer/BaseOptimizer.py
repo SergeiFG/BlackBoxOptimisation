@@ -23,7 +23,7 @@ else:
     pass
 
 
-DEBUG_THE_BIGGEST_ONE = 999999999
+DEBUG_THE_BIGGEST_ONE = 10
 """Самое большое число. Пока в дебаге"""
 
 
