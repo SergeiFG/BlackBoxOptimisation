@@ -68,7 +68,7 @@ class GaussOpt(BaseOptimizer):
         res = minimize(fun=func,
                        bounds=self.bound_of_vec,
                        x0=self.most_opt_vec,
-                       method='BFGS',
+                       method='L-BFGS-B',
                        tol=1e-6
                        )
         return res.x
@@ -95,7 +95,7 @@ class GaussOpt(BaseOptimizer):
                 np.random.seed(self._seed)
             first_vec = np.array(self._to_opt_model_data._vec[:,OptimizedVectorData.values_index_start].copy())
             length = first_vec.shape[0]
-            factors = np.random.uniform(-2,2, size=(self._to_model_vec_size*population,length))
+            factors = np.random.uniform(0.95,1.05, size=(self._to_model_vec_size*population,length))
             init_vecs = factors * first_vec
 
             return [first_vec] + [init_vecs[i] for i in range(init_vecs.shape[0])]
