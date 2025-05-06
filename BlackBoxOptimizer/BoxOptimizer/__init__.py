@@ -1,1 +1,1 @@
-from .Optimizer import Optimizer
+from .Optimizer import Optimizer, OptimisationTypes
