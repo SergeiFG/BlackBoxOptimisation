@@ -12,8 +12,7 @@ NOTE:
 
 # Импорт основного класса оптимизации
 from BlackBoxOptimizer import Optimizer
-from BlackBoxOptimizer import TestShaffleOpt
-
+from BlackBoxOptimizer import GaussOpt
 
 
 import numpy as np
@@ -48,18 +47,16 @@ if __name__ == "__main__":
 
     # Создать класс оптимизатора
     opt = Optimizer(
-        optCls              = TestShaffleOpt,
-        seed                = 1546, 
-        to_model_vec_size   = 21,
+        optCls              = GaussOpt,
+        to_model_vec_size   = 3,
         from_model_vec_size = 3,
-        iter_limit          = 10
+        iter_limit          = 10,
         )
 
     # Пример конфигурирования для конктретной реализации оптимизирущего класса
-    opt.configure(seed = 24657)
 
     # Запуск оптимизации
     opt.modelOptimize(func = test_object_function_variant_B)
 
     # Пример запроса истории изменения вектора, отправляемого в модель
-    print(opt.getHistoricalData("vec_to_model"))
+    print(opt.getResult())
