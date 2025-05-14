@@ -1,19 +1,17 @@
 import numpy as np
 
-from typing import Callable
+from typing import Callable, List
 
-import sys
 
 from scipy.stats import norm
 from scipy.optimize import minimize
 from sklearn.gaussian_process import GaussianProcessRegressor
-from sklearn.preprocessing import StandardScaler
 
 
-from ..BaseOptimizer import BaseOptimizer, OptimizedVectorData
+from ..BaseOptimizer import BaseOptimizer, _boolItem
 
 class GaussOpt(BaseOptimizer):
-    def __init__(self, kernel_cfg: tuple[str, dict] = ('Matern', {'nu': 2.5}), *args, **kwargs) -> None:
+    def __init__(self, kernel_cfg: tuple[str, dict] = ('Matern', {'nu': 2.5}), discrete_indices: List[int] = None, *args, **kwargs) -> None:
         """
         __init__
         ---
@@ -42,6 +40,9 @@ class GaussOpt(BaseOptimizer):
         self.input_bound_of_vec = self._bound_func_("to_model")
         """Ограничения параметров векторов на вход в виде массива"""
         self.output_bound_of_vec = self._bound_func_("from_model")
+        """Ограничения параметров векторов на выход в виде массива"""
+        self.discrete_indices = discrete_indices if discrete_indices is not None else []
+        """Индексы дискретный параметров"""
 
     
     @staticmethod
@@ -112,18 +113,22 @@ class GaussOpt(BaseOptimizer):
     def _init_vecs(self,population):
             if self._seed is not None:
                 np.random.seed(self._seed)
-            first_vec = np.array(self._to_opt_model_data._vec[:,OptimizedVectorData.values_index_start].copy())
+            first_vec = self._to_opt_model_data.vecs.reshape(1, self._to_model_vec_size)
             length = first_vec.shape[0]
-            factors = np.random.uniform(0.99,1.01, size=(self._to_model_vec_size*population,length))
+            factors = np.random.uniform(0.97,1.03, size=(self._to_model_vec_size*population,length))
             init_vecs = factors * first_vec
 
-            return [first_vec] + [init_vecs[i] for i in range(init_vecs.shape[0])]
+            for vec in init_vecs:
+                for i in self.discrete_indices:
+                    vec[i] = np.random.randint(0, 2)
+
+            return first_vec + [init_vecs[i] for i in range(init_vecs.shape[0])]
     """Создание первой популяции векторов для нормальной работы метода, необходимо 10*количество MV"""
 
     def _main_calc_func(self, func: Callable[[np.ndarray], np.ndarray]):
         self.model.fit(self.history_to_opt_model_data,self.res_history_to_opt_model_data)
         next_x = self._propose_location()
-        self.history_to_opt_model_data.append(next_x.copy())
+        self.history_to_opt_model_data = np.vstack([self.history_to_opt_model_data, next_x.copy()])
         output_value = func(next_x.copy())
         candidate_vec = output_value[0]
         if not self._check_output_constraints(output_value):
@@ -167,19 +172,30 @@ class GaussOpt(BaseOptimizer):
             kernel = kernel_cls(**kernel_params)
 
             self.model = GaussianProcessRegressor(kernel=kernel)
+        if 'discrete_indices' in kwargs:
+            self.discrete_indices = kwargs['discrete_indices']
     """Настройка метода"""
 
     def modelOptimize(self, func : Callable[[np.array], np.array]) -> None:
         self.history_to_opt_model_data = self._init_vecs(10)
         res_list = [func(vec)[0] for vec in self.history_to_opt_model_data]
         self.res_history_to_opt_model_data = res_list
-        
+
         if self.target_to_opt:
             self.res_of_most_opt_vec = max(res_list)
         else:
             self.res_of_most_opt_vec = min(res_list)
 
         self.most_opt_vec = self.history_to_opt_model_data[self.res_history_to_opt_model_data.index(self.res_of_most_opt_vec)]
+
+        discrete_indices = []
+        for i, prop in enumerate(self._to_opt_model_data._values_properties_list):
+            if isinstance(prop, _boolItem):
+                discrete_indices.append(i)
+        
+        # Добавляем явно указанные дискретные индексы
+        discrete_indices.extend(self.discrete_indices)
+        discrete_indices = list(set(discrete_indices))  # Удаляем дубликаты
 
         for _ in range(self._iteration_limitation):
             self.input_bound_of_vec = self._bound_func_("to_model")
