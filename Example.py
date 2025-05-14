@@ -13,7 +13,7 @@ warnings.filterwarnings('ignore')
 if __name__ == "__main__":
 
 
-    target_point = np.array([0, 0.5, -0.2])  # Целевая точка, которую хотим увидеть, используется для отладки
+    target_point = np.array([2, 0.5, -0.2])  # Целевая точка, которую хотим увидеть, используется для отладки
     model = SquareSumModel(-target_point)
 
     # Создать класс оптимизатора
@@ -22,15 +22,17 @@ if __name__ == "__main__":
         seed                = 156, # TODO: Проверить, точно ли работает. Сейчас выдаёт разные значения при одном seed
         to_model_vec_size   = 3,
         from_model_vec_size = 1,
-        iter_limit          = 100,
+        iter_limit          = 200,
         external_model = model.evaluate,
         # user_function = lambda x: x[0],
         optimisation_type = OptimisationTypes.minimize,
         target = None,
+        discrete_indices = [2]
         )
 
     # Пример конфигурирования для конктретной реализации оптимизирущего класса
     opt.configure(kernel_cfg=('RBF',{}))
+    opt.setVecItemLimit(0, 'to_model', -1, 1)
     # Запуск оптимизации
     opt.modelOptimize()
     currentOptimizer = opt.getOptimizer()

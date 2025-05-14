@@ -120,7 +120,7 @@ class GaussOpt(BaseOptimizer):
 
             for vec in init_vecs:
                 for i in self.discrete_indices:
-                    vec[i] = np.random.randint(0, 2)
+                    vec[i] = np.random.rand()
 
             return first_vec + [init_vecs[i] for i in range(init_vecs.shape[0])]
     """Создание первой популяции векторов для нормальной работы метода, необходимо 10*количество MV"""
@@ -128,8 +128,11 @@ class GaussOpt(BaseOptimizer):
     def _main_calc_func(self, func: Callable[[np.ndarray], np.ndarray]):
         self.model.fit(self.history_to_opt_model_data,self.res_history_to_opt_model_data)
         next_x = self._propose_location()
+        next_x_for_fun = next_x.copy()
+        for idx in self.discrete_indices:
+            next_x_for_fun[idx] = 1 if next_x_for_fun[idx]>=0.5 else 0
         self.history_to_opt_model_data = np.vstack([self.history_to_opt_model_data, next_x.copy()])
-        output_value = func(next_x.copy())
+        output_value = func(next_x_for_fun)
         candidate_vec = output_value[0]
         if not self._check_output_constraints(output_value):
                 candidate_vec = self._penalize_fitness(candidate_vec, output_value)
@@ -178,7 +181,12 @@ class GaussOpt(BaseOptimizer):
 
     def modelOptimize(self, func : Callable[[np.array], np.array]) -> None:
         self.history_to_opt_model_data = self._init_vecs(10)
-        res_list = [func(vec)[0] for vec in self.history_to_opt_model_data]
+        history_for_fun = self.history_to_opt_model_data
+        for vec in history_for_fun:
+            for idx in self.discrete_indices:
+                vec[idx] = 1 if vec[idx]>=0.5 else 0
+
+        res_list = [func(vec)[0] for vec in history_for_fun]
         self.res_history_to_opt_model_data = res_list
 
         if self.target_to_opt:
@@ -206,8 +214,11 @@ class GaussOpt(BaseOptimizer):
 
     def getResult(self):
         if self.target_to_opt:
-            return self.history_to_opt_model_data[self.res_history_to_opt_model_data.index(max(self.res_history_to_opt_model_data))]
+            result = self.history_to_opt_model_data[self.res_history_to_opt_model_data.index(max(self.res_history_to_opt_model_data))]
         else: 
-            return self.history_to_opt_model_data[self.res_history_to_opt_model_data.index(min(self.res_history_to_opt_model_data))]
+            result = self.history_to_opt_model_data[self.res_history_to_opt_model_data.index(min(self.res_history_to_opt_model_data))]
+        for idx in self.discrete_indices:
+            result[idx] = 1 if result[idx]>=0.5 else 0
+        return result
     """Функция результата, возращает точку"""
     
