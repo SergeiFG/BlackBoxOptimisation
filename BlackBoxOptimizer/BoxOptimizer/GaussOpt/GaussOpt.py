@@ -68,7 +68,7 @@ class GaussOpt(BaseOptimizer):
         res = minimize(fun=func,
                        bounds=self.input_bound_of_vec,
                        x0=self.most_opt_vec,
-                       method='L-BFGS-B',
+                       method='Nelder-Mead',
                        tol=1e-6
                        )
         return res.x
