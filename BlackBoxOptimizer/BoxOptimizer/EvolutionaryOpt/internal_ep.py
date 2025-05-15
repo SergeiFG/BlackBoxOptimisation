@@ -4,7 +4,13 @@ from scipy.interpolate import RBFInterpolator
 class EvolutionaryProgramming:
     def __init__(self, func, dimension=4, population_size=10, offspring_per_parent=5,
                  mutation_prob=0.3, sigma_init=0.1, t_max=50,
-                 lower_bounds=None, upper_bounds=None):
+                 lower_bounds=None, upper_bounds=None,
+                 output_lower_bounds=None, output_upper_bounds=None,
+                 discrete_indices=None):
+        """
+        Args:
+            discrete_indices: list[int] - индексы параметров, которые должны быть 0 или 1
+        """
         self.func = func
         self.dimension = dimension
         self.population_size = population_size
@@ -12,179 +18,258 @@ class EvolutionaryProgramming:
         self.mutation_prob = mutation_prob
         self.sigma_init = sigma_init
         self.t_max = t_max
+        self.discrete_indices = discrete_indices if discrete_indices is not None else []
+
+        # Проверка корректности дискретных индексов
+        for idx in self.discrete_indices:
+            if idx >= dimension:
+                raise ValueError(f"Индекс дискретного параметра {idx} превышает размерность {dimension}")
 
         # Инициализация границ
         self.lower_bounds = np.full(dimension, -np.inf) if lower_bounds is None else np.array(lower_bounds)
         self.upper_bounds = np.full(dimension, np.inf) if upper_bounds is None else np.array(upper_bounds)
+
+        # Инициализация границ выходных переменных
+        self.output_lower_bounds = np.array([]) if output_lower_bounds is None else np.array(output_lower_bounds)
+        self.output_upper_bounds = np.array([]) if output_upper_bounds is None else np.array(output_upper_bounds)
 
         if offspring_per_parent < 1:
             raise ValueError("offspring_per_parent должен быть >= 1")
 
         self.tau = 1 / np.sqrt(2 * np.sqrt(self.population_size * self.dimension))
         self.tau_prime = 1 / np.sqrt(2 * self.population_size * self.dimension)
-        self.min_epsilon = 1e-3  # Минимальное значение для epsilon
-        self.surrogate_update_freq = 5  # Частота обновления суррогатной модели
+        self.min_epsilon = 1e-3
+        self.surrogate_update_freq = 5
 
-        # Инициализация популяции с гарантированным соблюдением границ
+        # Инициализация популяции
         self.population = self._initialize_population()
         self.sigmas = np.full((self.population_size, self.dimension), self.sigma_init)
         self.surrogate_model = None
         self.function_values = None
 
     def _initialize_population(self):
-        """Генерация начальной популяции с соблюдением границ"""
+        """Инициализация популяции с учетом дискретных параметров"""
         population = np.zeros((self.population_size, self.dimension))
+        
         for i in range(self.dimension):
-            population[:, i] = np.random.uniform(
-                max(self.lower_bounds[i], -5),  # Нижняя граница
-                min(self.upper_bounds[i], 5),   # Верхняя граница
-                self.population_size
-            )
+            if i in self.discrete_indices:
+                # Генерация бинарных значений (0 или 1)
+                population[:, i] = np.random.randint(0, 2, size=self.population_size)
+            else:
+                # Генерация непрерывных значений
+                lower = self.lower_bounds[i] if not np.isinf(self.lower_bounds[i]) else -1e10
+                upper = self.upper_bounds[i] if not np.isinf(self.upper_bounds[i]) else 1e10
+                population[:, i] = np.random.uniform(lower, upper, self.population_size)
+                
         return population
 
     def _enforce_bounds(self, x):
-        """Строгое соблюдение границ с защитой от численных погрешностей"""
+        """Применение ограничений с учетом дискретных параметров"""
         x_clipped = np.clip(x, self.lower_bounds, self.upper_bounds)
-        # Дополнительная проверка для каждого измерения
+        
+        # Для дискретных параметров - строго 0 или 1
+        for idx in self.discrete_indices:
+            x_clipped[idx] = 1 if x_clipped[idx] >= 0.5 else 0
+            
+        # Для непрерывных параметров - небольшой отступ от границ
         for i in range(self.dimension):
-            if np.isclose(x_clipped[i], self.lower_bounds[i]):
-                x_clipped[i] = self.lower_bounds[i] + 1e-5
-            elif np.isclose(x_clipped[i], self.upper_bounds[i]):
-                x_clipped[i] = self.upper_bounds[i] - 1e-5
+            if i not in self.discrete_indices:
+                if np.isclose(x_clipped[i], self.lower_bounds[i]):
+                    x_clipped[i] = self.lower_bounds[i] + 1e-5
+                elif np.isclose(x_clipped[i], self.upper_bounds[i]):
+                    x_clipped[i] = self.upper_bounds[i] - 1e-5
+                    
         return x_clipped
 
+    def _check_output_constraints(self, output_values):
+        """Проверка ограничений выходных переменных"""
+        if len(output_values) <= 1:  # Только целевая функция
+            return True
+            
+        # Проверяем только те параметры, для которых заданы ограничения
+        num_output_params = min(len(self.output_lower_bounds), len(output_values)-1)
+        
+        for i in range(num_output_params):
+            if (output_values[i+1] < self.output_lower_bounds[i] or 
+                output_values[i+1] > self.output_upper_bounds[i]):
+                return False
+        return True
+
+    def _penalize_fitness(self, fitness, output_values):
+        """Штрафование fitness при нарушении ограничений"""
+        penalty = 0
+        output_params = output_values[1:] if len(output_values) > 1 else []
+        
+        for i in range(min(len(output_params), len(self.output_lower_bounds))):
+            if not np.isinf(self.output_lower_bounds[i]):
+                penalty += max(self.output_lower_bounds[i] - output_params[i], 0)**2
+                
+        for i in range(min(len(output_params), len(self.output_upper_bounds))):
+            if not np.isinf(self.output_upper_bounds[i]):
+                penalty += max(output_params[i] - self.output_upper_bounds[i], 0)**2
+                
+        return fitness + 1e6 * penalty
+
     def mutate(self, parent_x, parent_sigma):
+        """Мутация с учетом дискретных параметров"""
         offspring = []
+        
         for _ in range(self.offspring_per_parent):
             child_x = parent_x.copy()
             child_sigma = parent_sigma.copy()
             
-            # Применяем мутацию с контролем у границ
-            mask = (np.random.rand(self.dimension) <= self.mutation_prob)
+            # Мутация непрерывных параметров
+            continuous_mask = np.ones(self.dimension, dtype=bool)
+            if self.discrete_indices:
+                continuous_mask[np.array(self.discrete_indices)] = False
+                
+            mask = (np.random.rand(self.dimension) <= self.mutation_prob) & continuous_mask
             mutation = mask * (child_sigma * np.random.randn(self.dimension))
             
-            # Плавное ограничение у границ
-            too_low = (child_x + mutation) <= self.lower_bounds
-            too_high = (child_x + mutation) >= self.upper_bounds
-            mutation[too_low] *= 0.5
-            mutation[too_high] *= 0.5
-            
+            # Применение мутации
             child_x += mutation
             child_x = self._enforce_bounds(child_x)
             
-            # Мутация параметров мутации
-            child_sigma *= np.exp(self.tau_prime * np.random.randn() + 
-                                self.tau * np.random.randn(self.dimension))
+            # Мутация дискретных параметров (инверсия)
+            for idx in self.discrete_indices:
+                if np.random.rand() <= self.mutation_prob:
+                    child_x[idx] = 1 - child_x[idx]
             
-            # Вычисление fitness
-            fitness = self.func(child_x)
+            # Обновление сигм только для непрерывных параметров
+            child_sigma[continuous_mask] *= np.exp(
+                self.tau_prime * np.random.randn() + 
+                self.tau * np.random.randn(np.sum(continuous_mask)))
+            
+            # Расчет фитнес-функции
+            output_values = self.func(child_x)
+            fitness = output_values[0]
+            
+            if not self._check_output_constraints(output_values):
+                fitness = self._penalize_fitness(fitness, output_values)
+            
             offspring.append({
                 'x': child_x,
                 'sigma': child_sigma,
-                'fitness': fitness
+                'fitness': fitness,
+                'output_values': output_values
             })
+            
         return offspring
 
-    def update_surrogate(self):
-        """Обновление суррогатной модели с защитой от сингулярности"""
-        epsilon = max(np.mean(np.std(self.population, axis=0)), self.min_epsilon)
+    def select_best_offspring(self, offspring):
+        """Выбор лучшего потомка"""
+        if not offspring:
+            raise ValueError("No offspring generated! Check mutation parameters.")
+        return min(offspring, key=lambda ind: ind['fitness'])
+
+    def run(self):
+        """Основной цикл оптимизации"""
+        for t in range(self.t_max):
+            if t == 0:
+                # Первое поколение
+                all_offspring = []
+                for i in range(self.population_size):
+                    offspring = self.mutate(self.population[i], self.sigmas[i])
+                    all_offspring.extend(offspring)
+                
+                self.population = np.array([ind['x'] for ind in all_offspring])
+                self.sigmas = np.array([ind['sigma'] for ind in all_offspring])
+                self.function_values = np.array([ind['fitness'] for ind in all_offspring])
+            else:
+                # Последующие поколения
+                new_population = []
+                new_sigmas = []
+                new_values = []
+                
+                for i in range(self.population_size):
+                    offspring = self.mutate(self.population[i], self.sigmas[i])
+                    best = self.select_best_offspring(offspring)
+                    new_population.append(best['x'])
+                    new_sigmas.append(best['sigma'])
+                    output = self.func(best['x'])
+                    fitness = output[0]
+                    
+                    if not self._check_output_constraints(output):
+                        fitness = self._penalize_fitness(fitness, output)
+                    
+                    new_values.append(fitness)
+                
+                # Объединение старой и новой популяции
+                combined_population = np.vstack((self.population, np.array(new_population)))
+                combined_sigmas = np.vstack((self.sigmas, np.array(new_sigmas)))
+                combined_values = np.hstack((self.function_values, np.array(new_values)))
+                
+                # Отбор лучших
+                best_indices = np.argsort(combined_values)[:self.population_size]
+                self.population = combined_population[best_indices]
+                self.sigmas = combined_sigmas[best_indices]
+                self.function_values = combined_values[best_indices]
         
-        # Добавляем небольшой шум для предотвращения сингулярности
+        # Возвращаем лучшее решение
+        best_idx = np.argmin(self.function_values)
+        return self.population[best_idx], self.function_values[best_idx]
+
+    def _validate_population(self):
+        """Проверка соблюдения ограничений"""
+        for i in range(self.population_size):
+            self.population[i] = self._enforce_bounds(self.population[i])
+
+    def update_surrogate(self):
+        """Обновление суррогатной модели"""
+        epsilon = max(np.mean(np.std(self.population, axis=0)), self.min_epsilon)
         noisy_population = self.population + np.random.normal(0, 1e-8, self.population.shape)
         
         try:
             self.surrogate_model = RBFInterpolator(
                 noisy_population,
                 self.function_values,
-                kernel='linear',  # Используем линейное ядро для стабильности
+                kernel='linear',
                 epsilon=epsilon
             )
         except np.linalg.LinAlgError:
-            # Fallback: отключаем суррогатную модель при ошибке
             self.surrogate_model = None
 
-    def select_best_offspring(self, offspring):
-        if not offspring:
-            raise ValueError("No offspring generated! Check mutation parameters.")
-        best_offspring = min(offspring, key=lambda ind: ind['fitness'])
-        return best_offspring['x'], best_offspring['sigma']
 
-    def run(self):
-        for t in range(self.t_max):
-            if t == 0:
-                # Первая генерация
-                all_off = []
-                for i in range(self.population_size):
-                    off = self.mutate(self.population[i], self.sigmas[i])
-                    all_off.extend(off)
-                
-                # Обновляем популяцию
-                self.population = np.array([ind['x'] for ind in all_off])
-                self.sigmas = np.array([ind['sigma'] for ind in all_off])
-                self.function_values = np.array([ind['fitness'] for ind in all_off])
-                
-                # Проверка границ
-                self._validate_population()
-            else:
-                # Обновляем суррогатную модель не каждый шаг
-                if t % self.surrogate_update_freq == 0:
-                    self.update_surrogate()
-                
-                new_pop = []
-                new_sig = []
-                new_val = []
-                for i in range(self.population_size):
-                    off = self.mutate(self.population[i], self.sigmas[i])
-                    best = self.select_best_offspring(off)
-                    new_pop.append(best[0])
-                    new_sig.append(best[1])
-                    new_val.append(self.func(best[0]))
-                
-                # Отбор лучших
-                comb_pop = np.vstack((self.population, np.array(new_pop)))
-                comb_sig = np.vstack((self.sigmas, np.array(new_sig)))
-                comb_val = np.hstack((self.function_values, np.array(new_val)))
-                
-                best_idx = np.argsort(comb_val)[:self.population_size]
-                self.population = comb_pop[best_idx]
-                self.sigmas = comb_sig[best_idx]
-                self.function_values = comb_val[best_idx]
-                
-                # Проверка границ
-                self._validate_population()
-        
-        i_best = np.argmin(self.function_values)
-        return self.population[i_best], self.function_values[i_best]
+def test_evolutionary_programming():
+    """Тестовая функция для проверки работы алгоритма"""
+    def test_func(x):
+        # x[0] - непрерывный параметр
+        # x[1] - дискретный параметр (0 или 1)
+        # x[2] - дискретный параметр (0 или 1)
+        return np.array([np.sum(x**2), x[1], x[2]])
+    
+    # Параметры оптимизации
+    params = {
+        'func': test_func,
+        'dimension': 3,
+        'population_size': 30,
+        'offspring_per_parent': 2,
+        'mutation_prob': 0.3,
+        'sigma_init': 0.2,
+        't_max': 100,
+        'lower_bounds': [0, 0, 0],
+        'upper_bounds': [10, 1, 1],
+        'discrete_indices': [1, 2]  # Индексы дискретных параметров
+    }
+    
+    # Создаем оптимизатор
+    optimizer = EvolutionaryProgramming(**params)
+    
+    # Запускаем оптимизацию
+    best_solution, best_fitness = optimizer.run()
+    output = test_func(best_solution)
+    
+    # Выводим результаты
+    print("\n=== Результаты оптимизации ===")
+    print(f"Лучшее решение: {best_solution}")
+    print(f"Значение функции: {best_fitness:.6f}")
+    print(f"Дискретные параметры: {best_solution[1]} (должен быть 0 или 1), {best_solution[2]} (должен быть 0 или 1)")
+    
+    # Проверка ограничений
+    print("\n=== Проверка ограничений ===")
+    print(f"Непрерывный параметр в границах [0, 10]: {0 <= best_solution[0] <= 10}")
+    print(f"Дискретные параметры: {best_solution[1] in [0, 1]} и {best_solution[2] in [0, 1]}")
 
-    def _validate_population(self):
-        """Проверка соблюдения границ для всей популяции"""
-        for i in range(self.population_size):
-            if not (np.all(self.population[i] >= self.lower_bounds) and 
-                   np.all(self.population[i] <= self.upper_bounds)):
-                self.population[i] = self._enforce_bounds(self.population[i])
 
-# def objective(x):
-#     return np.sum(x**2)
-
-# # Ограничения: x[0] ∈ [0,10], x[1] ∈ [-5,5], x[2] ∈ [1,100]
-# lower_bounds = [0, 10, 1]
-# upper_bounds = [10, 50, 100]
-
-# ep = EvolutionaryProgramming(
-#     func=objective,
-#     dimension=3,
-#     lower_bounds=lower_bounds,
-#     upper_bounds=upper_bounds,
-#     population_size=20,
-#     t_max=100
-# )
-
-# best_solution, best_fitness = ep.run()
-
-# print("\nРезультаты:")
-# print(f"Лучшее решение: {best_solution}")
-# print(f"Лучшее значение функции: {best_fitness}")
-# print("\nПроверка ограничений:")
-# for i in range(3):
-#     print(f"x[{i}] ∈ [{lower_bounds[i]}, {upper_bounds[i]}]: "
-#           f"{lower_bounds[i] <= best_solution[i] <= upper_bounds[i]}")
+if __name__ == "__main__":
+    test_evolutionary_programming()   

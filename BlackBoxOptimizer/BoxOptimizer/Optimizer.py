@@ -115,6 +115,8 @@ class Optimizer(object):
                 self._CurrentOptimizerObject.configure(**{key: value})
                 """Если не нашли параметр в Optimizer, конфигурируем алгоритм оптимизации"""
 
+
+
     def modelOptimize(self) -> None:
         """
         modelOptimize
@@ -122,6 +124,8 @@ class Optimizer(object):
         Запуск оптимизации через передачу функции черного ящика
         """
         return self._CurrentOptimizerObject.modelOptimize(self._evaluate)
+
+
 
     def getResult(self) -> np.ndarray:
         """
@@ -148,6 +152,7 @@ class Optimizer(object):
         return self._CurrentOptimizerObject.getHistoricalData(key)
     
     
+    
     def setVecItemLimit(self, 
                         index : int, 
                         vec_dir : Literal["to_model", "from_model"] = "to_model",
@@ -168,6 +173,58 @@ class Optimizer(object):
         return self._CurrentOptimizerObject.setVecItemLimit(
             index = index, vec_dir = vec_dir, min = min, max = max)
 
+
+
+    def setVecItemType(self, 
+                        index : int, 
+                        new_type : Literal["float", "bool"],
+                        vec_dir  : Literal["to_model", "from_model"] = "to_model",
+                        min : None | float = None,
+                        max : None | float = None,
+                        *args, 
+                        **kwargs) -> None:
+        """
+        setVecItemType
+        ---
+        
+        Установка нового типа для элемента вектора кандидата
+        
+        Аргументы:
+            index    : int - Индекс ограничиваемого элемента внутри вектора
+            min      : None | float - Устанавливаемый минимум
+            max      : None | float - Устанавливаемый максимум
+            vec_dir  : Literal["to_model", "from_model"] - Выбор вектора направления передачи параметров
+            new_type : Literal["float", "bool"] - Выбираемый тип для элемента
+            *args, **kwargs - Специфичные для типа атрибуты
+        """
+        return self._CurrentOptimizerObject.setVecItemType(
+            index = index, vec_dir = vec_dir, new_type = new_type, *args, **kwargs)
+
+
+
+    def setPreSetCadidateVec(self, 
+                            candidate_index : int,
+                            vec : np.ndarray,
+                            vec_dir : Literal["to_model", "from_model"] = "to_model") -> None:
+        """
+        setPreSetCadidateVec
+        ---
+        
+        Установка значений вектора кандидата по номеру кандидата
+        
+        Аргументы:
+            candidate_index : int - Индекс вектора-кандидата
+            vec : np.ndarray - Устанавливаемый вектор
+            vec_dir  : Literal["to_model", "from_model"] - Выбор вектора направления передачи параметров
+        """
+        return self._CurrentOptimizerObject.setPreSetCadidateVec(
+            candidate_index = candidate_index,
+            vec = vec,
+            vec_dir = vec_dir
+            )
+
+
+
     def getOptimizer(self):
         """
         getOptimizer
@@ -176,6 +233,8 @@ class Optimizer(object):
         Необходимо для отладки, получения метрик, тестирования
         """
         return self._CurrentOptimizerObject
+
+
 
     def _evaluate_external_model(self, to_vec: np.ndarray) -> np.ndarray:
         """
@@ -187,6 +246,8 @@ class Optimizer(object):
         return self.external_model(to_vec)
     # TODO: Подумать над возможностью реализовать мемоизацию для снижения числа вызовов внешней модели
 
+
+
     def _apply_user_func(self, from_vec: np.ndarray) -> float:
         """
         apply_user_func
@@ -195,6 +256,8 @@ class Optimizer(object):
         """
 
         return self.user_function(from_vec)
+
+
 
     def _transform_optimisation_type(self, value: float) -> float:
         """
@@ -208,6 +271,8 @@ class Optimizer(object):
 
         transform_func = optimization_transform_funcs[self.optimisation_type]
         return transform_func(value, self.target)
+
+
 
     def _evaluate(self, to_vec: list[np.ndarray] | np.ndarray) -> list[Tuple[float, np.ndarray]] | Tuple[float, np.ndarray]:
         """
@@ -242,6 +307,8 @@ class Optimizer(object):
 
         return res
 
+
+
     def get_usage_count(self) -> int:
         """
         get_usage_count
@@ -249,8 +316,9 @@ class Optimizer(object):
         Возвращает число вызовов внешней модели
 
         """
-
         return self._usage_count
+
+
 
     def _refresh_usage_count(self) -> None:
         """
@@ -259,8 +327,9 @@ class Optimizer(object):
         Обнуляет число вызовов внешней модели
 
         """
-
         self._usage_count = 0
+
+
 
     def _set_model(self, external_model) -> None:
         """
