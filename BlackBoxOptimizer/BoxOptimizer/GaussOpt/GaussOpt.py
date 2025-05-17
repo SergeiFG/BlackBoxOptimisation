@@ -11,7 +11,7 @@ from sklearn.gaussian_process import GaussianProcessRegressor
 from ..BaseOptimizer import BaseOptimizer, _boolItem
 
 class GaussOpt(BaseOptimizer):
-    def __init__(self, kernel_cfg: tuple[str, dict] = ('Matern', {'nu': 2.5}), discrete_indices: List[int] = None, *args, **kwargs) -> None:
+    def __init__(self, kernel_cfg: tuple[str, dict] = ('Matern', {'nu': 2.5}), *args, **kwargs) -> None:
         """
         __init__
         ---
@@ -41,7 +41,7 @@ class GaussOpt(BaseOptimizer):
         """Ограничения параметров векторов на вход в виде массива"""
         self.output_bound_of_vec = self._bound_func_("from_model")
         """Ограничения параметров векторов на выход в виде массива"""
-        self.discrete_indices = discrete_indices if discrete_indices is not None else []
+        self.discrete_indices = []
         """Индексы дискретный параметров"""
 
     
@@ -119,10 +119,9 @@ class GaussOpt(BaseOptimizer):
             init_vecs = factors * first_vec
 
             for vec in init_vecs:
-                for i in self.discrete_indices:
-                    vec[i] = np.random.rand()
+                vec[self.discrete_indices] = np.random.rand()
 
-            return first_vec + [init_vecs[i] for i in range(init_vecs.shape[0])]
+            return init_vecs
     """Создание первой популяции векторов для нормальной работы метода, необходимо 10*количество MV"""
 
     def _main_calc_func(self, func: Callable[[np.ndarray], np.ndarray]):
@@ -180,7 +179,19 @@ class GaussOpt(BaseOptimizer):
     """Настройка метода"""
 
     def modelOptimize(self, func : Callable[[np.array], np.array]) -> None:
+
+        discrete_indices = []
+        for i, prop in enumerate(self._to_opt_model_data._values_properties_list):
+            if isinstance(prop, _boolItem):
+                discrete_indices.append(i)
+        
+        # Добавляем явно указанные дискретные индексы
+        discrete_indices.extend(self.discrete_indices)
+        self.discrete_indices = list(set(discrete_indices))  # Удаляем дубликаты
+
+        
         self.history_to_opt_model_data = self._init_vecs(10)
+        #print(self.history_to_opt_model_data)
         history_for_fun = self.history_to_opt_model_data
         for vec in history_for_fun:
             for idx in self.discrete_indices:
@@ -195,15 +206,6 @@ class GaussOpt(BaseOptimizer):
             self.res_of_most_opt_vec = min(res_list)
 
         self.most_opt_vec = self.history_to_opt_model_data[self.res_history_to_opt_model_data.index(self.res_of_most_opt_vec)]
-
-        discrete_indices = []
-        for i, prop in enumerate(self._to_opt_model_data._values_properties_list):
-            if isinstance(prop, _boolItem):
-                discrete_indices.append(i)
-        
-        # Добавляем явно указанные дискретные индексы
-        discrete_indices.extend(self.discrete_indices)
-        discrete_indices = list(set(discrete_indices))  # Удаляем дубликаты
 
         for _ in range(self._iteration_limitation):
             self.input_bound_of_vec = self._bound_func_("to_model")

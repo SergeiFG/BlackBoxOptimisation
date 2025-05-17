@@ -13,27 +13,27 @@ warnings.filterwarnings('ignore')
 if __name__ == "__main__":
 
 
-    target_point = np.array([2, 0.5, -0.2, 1])  # Целевая точка, которую хотим увидеть, используется для отладки
-    discrete_index = np.array([3])
+    target_point = np.array([2, 0.5, -0.2, 1, 0])  # Целевая точка, которую хотим увидеть, используется для отладки
+    discrete_index = np.array([3, 4])
     model = DiscreteSquareSumModel(target=target_point,discrete_indices=discrete_index)
 
     # Создать класс оптимизатора
     opt = Optimizer(
         optCls              = GaussOpt,
-        seed                = 156, # TODO: Проверить, точно ли работает. Сейчас выдаёт разные значения при одном seed
-        to_model_vec_size   = 4,
+        seed                = 146, # TODO: Проверить, точно ли работает. Сейчас выдаёт разные значения при одном seed
+        to_model_vec_size   = 5,
         from_model_vec_size = 1,
         iter_limit          = 200,
         external_model = model.evaluate,
         # user_function = lambda x: x[0],
         optimisation_type = OptimisationTypes.minimize,
         target = None,
-        discrete_indices = discrete_index
         )
 
     # Пример конфигурирования для конктретной реализации оптимизирущего класса
     opt.configure(kernel_cfg=('RBF',{}))
-    opt.setVecItemLimit(3, 'to_model', 0, 1)
+    opt.setVecItemType(3, "bool", "to_model")
+    opt.setVecItemType(4, "bool", "to_model")
     # Запуск оптимизации
     opt.modelOptimize()
     currentOptimizer = opt.getOptimizer()
