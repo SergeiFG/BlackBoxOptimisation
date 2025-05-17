@@ -51,6 +51,7 @@ if __name__ == "__main__":
         to_model_vec_size   = 3,
         from_model_vec_size = 3,
         iter_limit          = 10,
+        
         )
 
     # Пример конфигурирования для конктретной реализации оптимизирущего класса
