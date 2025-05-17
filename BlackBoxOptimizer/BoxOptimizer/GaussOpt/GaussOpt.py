@@ -127,21 +127,21 @@ class GaussOpt(BaseOptimizer):
     def _main_calc_func(self, func: Callable[[np.ndarray], np.ndarray]):
         self.model.fit(self.history_to_opt_model_data,self.res_history_to_opt_model_data)
         next_x = self._propose_location()
+        self.history_to_opt_model_data = np.vstack([self.history_to_opt_model_data, next_x.copy()])
+
         next_x_for_fun = next_x.copy()
         for idx in self.discrete_indices:
             next_x_for_fun[idx] = 1 if next_x_for_fun[idx]>=0.5 else 0
-        self.history_to_opt_model_data = np.vstack([self.history_to_opt_model_data, next_x.copy()])
         output_value = func(next_x_for_fun)
-        candidate_vec = output_value[0]
         if not self._check_output_constraints(output_value):
-                candidate_vec = self._penalize_fitness(candidate_vec, output_value)
-        self.res_history_to_opt_model_data.append(candidate_vec)
+                output_value[0] = self._penalize_fitness(output_value[0], output_value)
+        self.res_history_to_opt_model_data.append(output_value)
         if self.target_to_opt:
-            self.res_of_most_opt_vec = max(candidate_vec, self.res_of_most_opt_vec)
+            self.res_of_most_opt_vec = max(output_value[0], self.res_of_most_opt_vec)
         else:
-            self.res_of_most_opt_vec = min(candidate_vec, self.res_of_most_opt_vec)
+            self.res_of_most_opt_vec = min(output_value[0], self.res_of_most_opt_vec)
         
-        self.most_opt_vec = self.history_to_opt_model_data[self.res_history_to_opt_model_data.index(self.res_of_most_opt_vec)]
+        self.most_opt_vec = self.history_to_opt_model_data[np.array(self.res_history_to_opt_model_data)[:,0].tolist().index(self.res_of_most_opt_vec)]
         
     """Основная функция подсчета"""
 
@@ -197,15 +197,15 @@ class GaussOpt(BaseOptimizer):
             for idx in self.discrete_indices:
                 vec[idx] = 1 if vec[idx]>=0.5 else 0
 
-        res_list = [func(vec)[0] for vec in history_for_fun]
+        res_list = [func(vec) for vec in history_for_fun]
         self.res_history_to_opt_model_data = res_list
 
         if self.target_to_opt:
-            self.res_of_most_opt_vec = max(res_list)
+            self.res_of_most_opt_vec = max(np.array(res_list)[:,0])
         else:
-            self.res_of_most_opt_vec = min(res_list)
+            self.res_of_most_opt_vec = min(np.array(res_list)[:,0])
 
-        self.most_opt_vec = self.history_to_opt_model_data[self.res_history_to_opt_model_data.index(self.res_of_most_opt_vec)]
+        self.most_opt_vec = self.history_to_opt_model_data[np.array(self.res_history_to_opt_model_data)[:,0].tolist().index(self.res_of_most_opt_vec)]
 
         for _ in range(self._iteration_limitation):
             self.input_bound_of_vec = self._bound_func_("to_model")
@@ -215,10 +215,7 @@ class GaussOpt(BaseOptimizer):
     """Функция инициализации и оптимизации"""
 
     def getResult(self):
-        if self.target_to_opt:
-            result = self.history_to_opt_model_data[self.res_history_to_opt_model_data.index(max(self.res_history_to_opt_model_data))]
-        else: 
-            result = self.history_to_opt_model_data[self.res_history_to_opt_model_data.index(min(self.res_history_to_opt_model_data))]
+        result = self.most_opt_vec
         for idx in self.discrete_indices:
             result[idx] = 1 if result[idx]>=0.5 else 0
         return result

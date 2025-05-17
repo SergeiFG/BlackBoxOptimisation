@@ -38,7 +38,7 @@ class DiscreteSquareSumModel(BaseModel):
         ---
         Метод вычисления CV внешней модели
         """
-        return np.array([self.func(to_vec)])
+        return np.array([self.func(to_vec), to_vec[0]*1, to_vec[1]*4])
 
     def calculate_true_optimum(self) -> np.ndarray:
         """
