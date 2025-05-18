@@ -46,25 +46,36 @@ class GaussOpt(BaseOptimizer):
 
     
     @staticmethod
-    def _expected_improvement(x, model, y_opt, maximize):
+    def _expected_improvement(x, model, y_opt, maximize, output_bounds, penalty_coef=1e2):
         x = np.array(x).reshape(1, -1)
-        mu, sigma = model.predict(x, return_std=True)
-        sigma = sigma.reshape(-1, 1)
-        with np.errstate(divide='ignore', invalid='ignore'):
-            if maximize:
-                improvement = mu - y_opt
-            else:
-                improvement = y_opt - mu
-            Z = improvement / sigma
-            ei = improvement * norm.cdf(Z) + sigma * norm.pdf(Z)
-            ei[sigma.flatten() == 0.0] = 0.0
-        return -float(ei[0, 0])
+        mu, sigma = model.predict(x, return_std=True)   # shapes (1, m), (1, m)
+        mu, sigma = mu.flatten(), sigma.flatten()       # теперь 1-D длины m
+
+        # считаем EI только для [0]-го выхода, но храним в массиве
+        ei = np.zeros_like(mu)
+        imp = (mu[0] - y_opt) if maximize else (y_opt - mu[0])
+        if sigma[0] > 0:
+            Z = imp / sigma[0]
+            ei[0] = imp * norm.cdf(Z) + sigma[0] * norm.pdf(Z)
+
+        # штрафы для остальных компонентов (1…m-1)
+        for i, (lb, ub) in enumerate(output_bounds, start=1):
+            if mu[i] < lb:
+                ei[0] -= penalty_coef * (lb - mu[i])**2
+            elif mu[i] > ub:
+                ei[0] -= penalty_coef * (mu[i] - ub)**2
+
+        # безопасно зануляем EI, если σ[0]==0
+        ei[0] = np.where(sigma[0] == 0.0, 0.0, ei[0])
+
+        # возвращаем скаляр
+        return -float(ei[0])
     """Функция максимального правдоподобия"""
 
     def _propose_location(self):
         y_opt = self.res_of_most_opt_vec
         maximize = self.target_to_opt
-        func = lambda x: self._expected_improvement(x, self.model, y_opt, maximize)
+        func = lambda x: self._expected_improvement(x, self.model, y_opt, maximize, output_bounds=self.output_bound_of_vec, penalty_coef=1e2)
         res = minimize(fun=func,
                        bounds=self.input_bound_of_vec,
                        x0=self.most_opt_vec,
@@ -108,14 +119,14 @@ class GaussOpt(BaseOptimizer):
             if not np.isinf(self.output_bound_of_vec[i][1]):
                 penalty += max(output_params[i] - self.output_bound_of_vec[i][1], 0)**2
                 
-        return fitness + 1e6 * penalty
+        return fitness + 1e1 * penalty
 
     def _init_vecs(self,population):
             if self._seed is not None:
                 np.random.seed(self._seed)
             first_vec = self._to_opt_model_data.vecs.reshape(1, self._to_model_vec_size)
             length = first_vec.shape[0]
-            factors = np.random.uniform(0.97,1.03, size=(self._to_model_vec_size*population,length))
+            factors = np.random.uniform(0.95,1.05, size=(self._to_model_vec_size*population,length))
             init_vecs = factors * first_vec
 
             for vec in init_vecs:
@@ -197,7 +208,14 @@ class GaussOpt(BaseOptimizer):
             for idx in self.discrete_indices:
                 vec[idx] = 1 if vec[idx]>=0.5 else 0
 
-        res_list = [func(vec) for vec in history_for_fun]
+        res_list = []
+
+        for vec in history_for_fun:
+            output_value = func(vec)
+            if not self._check_output_constraints(output_value):
+                output_value[0] = self._penalize_fitness(output_value[0], output_value)
+            res_list.append(output_value)
+
         self.res_history_to_opt_model_data = res_list
 
         if self.target_to_opt:

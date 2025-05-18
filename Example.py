@@ -20,7 +20,7 @@ if __name__ == "__main__":
     # Создать класс оптимизатора
     opt = Optimizer(
         optCls              = GaussOpt,
-        seed                = 146, # TODO: Проверить, точно ли работает. Сейчас выдаёт разные значения при одном seed
+        seed                = 10, # TODO: Проверить, точно ли работает. Сейчас выдаёт разные значения при одном seed
         to_model_vec_size   = 5,
         from_model_vec_size = 1,
         iter_limit          = 200,
@@ -34,6 +34,9 @@ if __name__ == "__main__":
     opt.configure(kernel_cfg=('RBF',{}))
     opt.setVecItemType(3, "bool", "to_model")
     opt.setVecItemType(4, "bool", "to_model")
+    opt.setVecItemLimit(0, "to_model", -2, 3)
+    for i in range(2):
+        opt.setVecItemLimit(i, "from_model", -1, 2)
     # Запуск оптимизации
     opt.modelOptimize()
     currentOptimizer = opt.getOptimizer()
