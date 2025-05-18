@@ -4,36 +4,41 @@ import numpy as np
 from BlackBoxOptimizer import SimulatedAnnealingOptimizer
 
 def test_simulated_annealing():
-    target_point = np.array([101, 50, 72])
+    target_point = np.array([1, 84, 72, 0, 1, 1])
     model = SquareSumModel(-target_point)
     
     opt = Optimizer(
         optCls=SimulatedAnnealingOptimizer,
         seed=1424,
-        to_model_vec_size=3,
+        to_model_vec_size=6,
         from_model_vec_size=1,
-        iter_limit=100000,  
+        iter_limit=10000,
         external_model=model.evaluate,
         optimisation_type=OptimisationTypes.minimize,
-        initial_temp=100.0, 
-        min_temp=1e-5,       
-        cooling_rate=0.999, 
-        step_size=1,      
+        initial_temp=50.0,
+        min_temp=1e-5,
+        cooling_rate=0.98,
+        step_size=0.8,
     )
     
-    opt.setVecItemLimit(0, min=0, max=1000)
-    opt.setVecItemLimit(1, min=0, max=1000)
-    opt.setVecItemLimit(2, min=0, max=1000)
+    # Устанавливаем ограничения и типы
+    opt.setVecItemLimit(0, min=0, max=100)
+    opt.setVecItemLimit(1, min=0, max=100)
+    opt.setVecItemLimit(2, min=0, max=100)
+    opt.setVecItemType(3, new_type="bool")
+    opt.setVecItemType(4, new_type="bool")
+    opt.setVecItemType(5, new_type="bool")
     
-
-    initial_guess = np.array([0, 0, 0])  
+    # Начальные значения
+    initial_guess = np.array([10.0, 10.0, 10.0, 0.0, 0.0, 0.0])
     opt.setPreSetCadidateVec(0, initial_guess)
     
-
     opt.modelOptimize()
     
-    # Получаем результаты
+    # Получаем и проверяем результат
     result = opt.getResult()
+
+    
     final_value = model.evaluate(result)[0]
     calls_count = opt.get_usage_count()
     
@@ -42,7 +47,7 @@ def test_simulated_annealing():
     print(f"Найденное решение: {result}")
     print(f"Значение функции: {final_value:.6f}")
     print(f"Число вызовов модели: {calls_count}")
-    print(f"Отклонение от оптимума: {np.linalg.norm(result - target_point):.6f}")
+    print(f"Отклонение от оптимума: {np.linalg.norm(np.array(result) - target_point):.6f}")
     print(f"Отклонение значения функции: {(final_value - model.func(target_point)):.10f}")
 
 if __name__ == "__main__":

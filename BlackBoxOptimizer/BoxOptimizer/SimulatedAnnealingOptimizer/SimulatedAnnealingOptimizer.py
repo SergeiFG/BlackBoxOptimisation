@@ -2,11 +2,9 @@ import math
 import numpy as np
 from typing import Callable, Tuple, Optional
 from ..BaseOptimizer import BaseOptimizer, OptimizedVectorData
+from ..BaseOptimizer import BaseOptimizer, _boolItem, _floatItem
 
-from ..BaseOptimizer import BaseOptimizer
-import numpy as np
-from typing import Callable
-import math
+
 
 class SimulatedAnnealingOptimizer(BaseOptimizer):
     """
@@ -48,13 +46,10 @@ class SimulatedAnnealingOptimizer(BaseOptimizer):
         self.restart_counter = 0
         self.iteration_counter = 0
         
-        # Адаптивные параметры
         self.acceptance_rate = 0.5
         self.target_acceptance = 0.4
         
-        # Инициализация нескольких кандидатов
-        self._vec_candidates_size = 5  # Число параллельных цепочек
-
+        self._vec_candidates_size = 5 
     def _init_model_vecs(self) -> None:
         """Переопределяем инициализацию для нескольких кандидатов"""
         super()._init_model_vecs()
@@ -70,9 +65,9 @@ class SimulatedAnnealingOptimizer(BaseOptimizer):
                 self._prepare_restart()
                 
     def _single_run_optimization(self, func: Callable[[np.array], np.array]) -> None:
-        """Одиночный прогон алгоритма"""
-        # Инициализация нескольких цепочек
-        current_solutions = [vec.copy() for vec in self._to_opt_model_data.iterVectors()]
+        """Одиночный прогон алгоритма с коррекцией дискретных значений"""
+        current_solutions = [self._correct_discrete_values(vec.copy()) 
+                            for vec in self._to_opt_model_data.iterVectors()]
         current_energies = [func(sol)[self._main_value_index] for sol in current_solutions]
         
         # Находим лучшую цепочку
@@ -108,30 +103,35 @@ class SimulatedAnnealingOptimizer(BaseOptimizer):
                 self._synchronize_chains(current_solutions, current_energies)
 
     def _generate_neighbor(self, solution: np.array) -> np.array:
-        """Генерация соседнего решения с адаптивным шагом"""
         neighbor = solution.copy()
-        perturbation = np.random.normal(
-            scale=self.step_size * (1 + 0.1 * np.random.randn()),
-            size=len(solution)
-        )
-        
-        # Применяем возмущение
-        neighbor += perturbation
-        
-        # Применение ограничений с отражением от границ
         for i in range(len(neighbor)):
             item_props = self._to_opt_model_data._values_properties_list[i]
             
-            if neighbor[i] < item_props.min:
-                neighbor[i] = 2 * item_props.min - neighbor[i]
-            elif neighbor[i] > item_props.max:
-                neighbor[i] = 2 * item_props.max - neighbor[i]
-                
-            # Гарантируем, что остались в пределах
-            neighbor[i] = np.clip(neighbor[i], item_props.min, item_props.max)
+            if isinstance(item_props, _boolItem):
+                # Вероятность переключения зависит от температуры
+                if np.random.random() < 0.1 * (1 - self.current_temp/self.initial_temp):
+                    neighbor[i] = 1.0 - neighbor[i]
+            elif isinstance(item_props, _floatItem):
+                perturbation = np.random.normal(scale=self.step_size)
+                neighbor[i] += perturbation
+                # Отражаем от границ
+                if neighbor[i] < item_props.min:
+                    neighbor[i] = 2 * item_props.min - neighbor[i]
+                elif neighbor[i] > item_props.max:
+                    neighbor[i] = 2 * item_props.max - neighbor[i]
         
-        return neighbor
-
+        # Гарантируем корректные дискретные значения
+        return self._correct_discrete_values(neighbor)
+    def _correct_discrete_values(self, solution: np.array) -> np.array:
+        """Корректирует дискретные значения в решении"""
+        corrected = solution.copy()
+        for i in range(len(corrected)):
+            props = self._to_opt_model_data._values_properties_list[i]
+            if isinstance(props, _boolItem):
+                corrected[i] = 1.0 if corrected[i] >= 0.5 else 0.0
+            elif isinstance(props, _floatItem):
+                corrected[i] = np.clip(corrected[i], props.min, props.max)
+        return corrected
     def _accept_solution(self, current_energy: float, new_energy: float) -> bool:
         """Критерий принятия решения с защитой от переполнения"""
         if new_energy < current_energy:
@@ -163,14 +163,17 @@ class SimulatedAnnealingOptimizer(BaseOptimizer):
         self.step_size = np.clip(self.step_size, 1e-4, 10 * self.initial_step_size)
 
     def _synchronize_chains(self, solutions, energies):
-        """Обмен информацией между цепочками"""
+        """Обмен информацией между цепочками с сохранением типов"""
         best_idx = np.argmin(energies)
         for i in range(len(solutions)):
             if i != best_idx and np.random.random() < 0.1:
-                # Частичное заимствование от лучшей цепочки
-                mix_mask = np.random.rand(len(solutions[i])) < 0.3
-                solutions[i][mix_mask] = solutions[best_idx][mix_mask]
-                energies[i] = float('inf')  # Пересчитается на следующей итерации
+                for j in range(len(solutions[i])):
+                    if np.random.random() < 0.3:
+                        if isinstance(self._to_opt_model_data._values_properties_list[j], _boolItem):
+                            solutions[i][j] = float(bool(solutions[best_idx][j]))
+                        else:
+                            solutions[i][j] = solutions[best_idx][j]
+                energies[i] = float('inf')
 
     def _prepare_restart(self):
         """Подготовка к рестарту алгоритма"""
