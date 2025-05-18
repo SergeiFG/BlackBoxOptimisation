@@ -122,6 +122,7 @@ class SimulatedAnnealingOptimizer(BaseOptimizer):
         
         # Гарантируем корректные дискретные значения
         return self._correct_discrete_values(neighbor)
+    
     def _correct_discrete_values(self, solution: np.array) -> np.array:
         """Корректирует дискретные значения в решении"""
         corrected = solution.copy()
