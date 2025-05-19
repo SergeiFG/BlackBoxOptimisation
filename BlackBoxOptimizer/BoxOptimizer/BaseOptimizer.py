@@ -12,25 +12,162 @@ BaseOptimizer
 from typing import TypeVar, Callable, Tuple, Literal
 import numpy as np
 import time
+import random
 
-# Подключаемые модули зависимой конфигурации
+
+
+# Подключаемые модули зависимой конфигурации``
 if __name__ == "__main__":
     pass
 else:
     pass
 
 
-DEBUG_THE_BIGGEST_ONE = 999999999
+DEBUG_THE_BIGGEST_ONE = 10
 """Самое большое число. Пока в дебаге"""
+
+
+
+class _vectorItemProperties(object):
+    """Базовый класс типа элемента вектора занчений
+    
+    """
+    def __init__(self, 
+                min : float | int,
+                max : float | int
+                ) -> None:
+
+        if min is not None and max is not None and min >= max:
+            raise ValueError(f"Значение {min} не может быть больше {max}")
+        
+        self._min  : float | int = min
+        self._max  : float | int = max
+
+    @property
+    def min(self):
+        return self._min
+
+    @min.setter
+    def min(self, new_val):
+        if new_val is None:
+            return
+        if not isinstance(new_val, (float, int)):
+            return
+        self._min = new_val
+
+    @property
+    def max(self):
+        return self._max
+
+    @max.setter
+    def max(self, new_val):
+        if new_val is None:
+            return
+        if not isinstance(new_val, (float, int)):
+            return
+        self._max = new_val
+
+
+    def randCreate(self):
+        """
+        randCreate
+        ----
+        Метод получения допустимого рандомного числа
+        """
+        raise NotImplementedError
+
+
+    def isCorrect(value) -> bool:
+        """
+        isCorrect
+        ---
+        Метод проверки корректности значения
+        """
+        raise NotImplementedError
+
+
+    def isWitihRange(self, value) -> bool:
+        """Проверка нахождения в диапазоне допустимых значений"""
+        return self._min <= value and value <= self._max
+
+    def __str__(self):
+        return f"<{self.__class__.__name__} : min [{self._min}] max [{self._max}]>"
+
+
+
+class _floatItem(_vectorItemProperties):
+    """"Элементы типа FLOAT"""
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+
+
+    def randCreate(self) -> float:
+        return random.uniform(
+            a = self._min if self._min != -np.inf else -DEBUG_THE_BIGGEST_ONE,
+            b = self._max if self._max !=  np.inf else  DEBUG_THE_BIGGEST_ONE
+            )
+
+
+    def isCorrect(self, value) -> bool:
+        """
+        isCorrect
+        ---
+        Метод проверки корректности значения
+        """
+        if not isinstance(value, (float, int)):
+            return False
+        if not self.isWitihRange(value): 
+            return False
+        return True
+
+
+
+class _boolItem(_vectorItemProperties):
+    """"Элементы типа BOOL"""
+    def __init__(self):
+        super().__init__(min = 0, max = 1)
+
+    def randCreate(self) -> float:
+        return random.randint(0, 1)
+
+    def isCorrect(self, value) -> bool:
+        """
+        isCorrect
+        ---
+        Метод проверки корректности значения
+        """
+        if not isinstance(value, (float, int)):
+            return False
+        if not self.isWitihRange(value): 
+            return False
+        if value != 0  or value != 1: 
+            return False
+        return True
+
+    @property
+    def min(self):
+        return self._min
+
+    @min.setter
+    def min(self, new_val):
+        self._min = 0
+
+    @property
+    def max(self):
+        return self._max
+
+    @max.setter
+    def max(self, new_val):
+        self._max = 1
 
 
 
 class OptimizedVectorData(object):
     
     # Перечисление индексов во внутреннем массиве класса
-    min_index          : int = 0
-    max_index          : int = 1
-    values_index_start : int = 2
+    # min_index          : int = 0
+    # max_index          : int = 1
+    values_index_start : int = 0
     
     # Положение векторов
     axis_X : int = 0
@@ -72,7 +209,7 @@ class OptimizedVectorData(object):
         self._vec_size : int = vec_size
         """Размер хранимого вектора"""
         self._vec_candidates_size : int = vec_candidates_size
-        
+
         self._vec : np.array = np.array(
             [
                 [0.0 for II in range(self._vec_candidates_size + OptimizedVectorData.values_index_start)] \
@@ -80,9 +217,52 @@ class OptimizedVectorData(object):
                 ],
             dtype = float
         )
-        self._vec[:, OptimizedVectorData.min_index] = -np.inf
-        self._vec[:, OptimizedVectorData.max_index] =  np.inf
+        # self._vec[:, OptimizedVectorData.min_index] = -np.inf
+        # self._vec[:, OptimizedVectorData.max_index] =  np.inf
         """Хранимый вектор значений, инициализируемый нулями, хранит значение минимума и максимума"""
+        
+        
+        self._values_properties_list : list[_floatItem | _boolItem] = \
+            [_floatItem(-np.inf, np.inf) for _ in range(self._vec_size)]
+        """Вектор хранения свойств элементов"""
+
+        self._values_allowed_types : list = [cls.__name__ for cls in _vectorItemProperties.__subclasses__()]
+        
+
+    def DEBUG_printInfo(self) -> None:
+        """
+        Отладочная печать содержимого
+        """
+        np.set_printoptions(linewidth = 150)
+        loc_max_c_property : int = 0
+        loc_max_c_index    : int = 8
+        loc_max_c_values   : int = 0
+        for item_prop, index, vec in zip(self._values_properties_list, range(self._vec_size), self._vec[:]):
+            loc_max_c_property = len(str(item_prop)) if len(str(item_prop)) > loc_max_c_property else loc_max_c_property
+            loc_max_c_index    = len(str(index))     if len(str(index))     > loc_max_c_index    else loc_max_c_index
+            loc_max_c_values   = len(str(vec))       if len(str(vec))       > loc_max_c_values   else loc_max_c_values
+        
+        print("| {property:{loc_max_c_property}} | {index:{loc_max_c_index}} | {values:{loc_max_c_values}} |".format(
+            clt_b = '\033[43m',
+            property = "Тип элементов",
+            index    = "Индекс",
+            values   = "Значения",
+            loc_max_c_property = loc_max_c_property,
+            loc_max_c_index    = loc_max_c_index,
+            loc_max_c_values   = loc_max_c_values
+        ))
+        print("|" + "-"*(loc_max_c_property + 2) + "|" + "-"*(loc_max_c_index + 2) + "|" + "-"*(loc_max_c_values + 2) + "|")
+        for item_prop, index, vec in zip(self._values_properties_list, range(self._vec_size), self._vec[:]):
+            print("| {property:{loc_max_c_property}} | {index:{loc_max_c_index}} | {values:{loc_max_c_values}} |".format(
+                property = str(item_prop),
+                index    = index,
+                values   = str(vec),
+                loc_max_c_property = loc_max_c_property,
+                loc_max_c_index    = loc_max_c_index,
+                loc_max_c_values   = loc_max_c_values
+            ))
+        np.set_printoptions()
+
 
     @property
     def vecs(self) -> np.ndarray:
@@ -101,6 +281,20 @@ class OptimizedVectorData(object):
             yield self._vec[:, column + OptimizedVectorData.values_index_start]
 
 
+    def setVecItemType(self, index : int, new_type : Literal["float", "bool"], *args, **kwargs) -> None:
+        """
+        setVecItemType
+        ---
+        Установка типа элемента вектора
+        
+        index    : int - Индекс изменяемого элемента вектора
+        new_type : Literal["float", "bool"]
+        """
+        loc_class_name = f"_{new_type}Item"
+        if loc_class_name not in self._values_allowed_types:
+            raise KeyError(f"Невозможно присвоить элементу тип {new_type}")
+        self._values_properties_list[index] = eval(loc_class_name)(*args, **kwargs)
+
 
     def setLimitation(self, 
                       index : int, 
@@ -112,35 +306,11 @@ class OptimizedVectorData(object):
         
         Установка ограничения для параметра внутри вектора
         """
-        loc_min = min if min is not None else \
-            -np.inf if self._vec[index][OptimizedVectorData.min_index] == -np.inf else \
-                self._vec[index][OptimizedVectorData.min_index]
-        loc_max = max if max is not None else \
-            np.inf if self._vec[index][OptimizedVectorData.max_index] == np.inf else \
-                self._vec[index][OptimizedVectorData.max_index]
-        
-        if loc_min is not None and loc_max is not None and loc_min >= loc_max:
-            raise ValueError(f"Значение {loc_min} не может быть больше {loc_max}")
-        
-        self._vec[index][OptimizedVectorData.min_index] = loc_min
-        self._vec[index][OptimizedVectorData.max_index] = loc_max
+        if min is not None and max is not None and min >= max:
+            raise ValueError(f"Значение {min} не может быть больше {max}")
 
-
-
-    def setVectorsRandVal(self, min_val : float, max_val : float) -> None:
-        """
-        setVectorsRandVal
-        ---
-        Получение начальных векторов с величинами по нормальному распределению
-        """
-        np.random.seed(int(self._seed))
-        vec : np.array
-        for vec in self.iterVectors():
-            vec[:] = np.random.uniform(
-                low  = min_val, 
-                high = max_val, 
-                size = self._vec_size
-                ).copy()
+        self._values_properties_list[index].min = min
+        self._values_properties_list[index].max = max
 
 
 
@@ -148,23 +318,17 @@ class OptimizedVectorData(object):
         """
         setVectorRandVal
         ---
-        TODO: Получение начального вектора с величинами в диапазонах допустимого минимума и максимума 
+        Получение начального вектора с величинами в диапазонах допустимого минимума и максимума 
         по нормальному распределению 
         """
-        np.random.seed(int(self._seed))
-        
-        for vec, min, max in \
-            zip(
-                self._vec[:, OptimizedVectorData.values_index_start:],
-                self._vec[:, OptimizedVectorData.min_index],
-                self._vec[:, OptimizedVectorData.max_index],
-                ):
-            vec[:] = np.random.uniform(
-                low  = min if min != -np.inf else -DEBUG_THE_BIGGEST_ONE, 
-                high = max if max !=  np.inf else  DEBUG_THE_BIGGEST_ONE, 
-                size = np.size(vec)
-                ).copy()
+        random.seed(int(self._seed))
 
+        for vec, index in zip(
+            self._vec[:, OptimizedVectorData.values_index_start:], 
+            range(self._vec_size)
+            ):
+            for i in range(np.size(vec)):
+                vec[i] = self._values_properties_list[index].randCreate()
 
 
 
@@ -179,13 +343,27 @@ class OptimizedVectorData(object):
             np.zeros(
                 shape = np.shape(
                     self._vec[:,OptimizedVectorData.values_index_start:])), dtype = bool)
-
-        for vec, bool_vec in zip(self._vec, loc_matrix):
-            for vec_item, bool_item_num in zip(vec[OptimizedVectorData.values_index_start:], range(np.size(bool_vec))):
+        
+        for vec, bool_vec, index in zip(
+            self._vec[:, OptimizedVectorData.values_index_start:], 
+            loc_matrix,
+            range(self._vec_size)
+            ):
+            for vec_item_val, bool_item_num in zip(vec, range(np.size(bool_vec))):
                 bool_vec[bool_item_num] = \
-                    (vec_item > vec[OptimizedVectorData.min_index] and vec_item < vec[OptimizedVectorData.max_index])
+                    self._values_properties_list[index].isWitihRange(vec_item_val)
+                    
         return loc_matrix
 
+
+    def setPreSetCadidateVec(self, candidate_index : int, vec : np.ndarray) -> None:
+        """
+        setPreSetCadidateVec
+        ---
+        Установка значений вектора кандидата по номеру кандидата
+        """
+        # TODO: Подумать над дополнительными провераками
+        self._vec[:, OptimizedVectorData.values_index_start + candidate_index] = vec
 
 
     def __str__(self):
@@ -236,7 +414,7 @@ class BaseOptimizer(object):
         """Используемая база генератора для псевдослучайных последовательностей"""
 
         self._init_param()
-
+        self._init_model_vecs()
         # Внутренние общие параметры генератора
         # ==========================================================================================
         self._historical_data_container : list = []
@@ -286,6 +464,16 @@ class BaseOptimizer(object):
         """Число векторов кандидатов для получения решения. По умолчанию 1. Изменяется в зависимости
         от реализации."""
 
+
+
+    def _init_model_vecs(self) -> None:
+        """
+        _init_to_model_vec
+        ---
+        Внутренний метод инициализации выходного вектора _to_opt_model_vec
+        
+        Выполняет наполнение выходного массива.
+        """
         self._to_opt_model_data : OptimizedVectorData = OptimizedVectorData(
             vec_size            = self._to_model_vec_size,
             vec_candidates_size = self._vec_candidates_size,
@@ -299,20 +487,8 @@ class BaseOptimizer(object):
             seed                = self._seed
             )
         """Входной вектор, получаемый от модели оптимизации"""
-
-        self._init_to_model_vec()
-
-
-
-    def _init_to_model_vec(self) -> None:
-        """
-        _init_to_model_vec
-        ---
-        Внутренний метод инициализации выходного вектора _to_opt_model_vec
         
-        Выполняет наполнение выходного массива.
-        """
-        self._to_opt_model_data.setVectorsRandVal(0.0, 1.0)
+        self._to_opt_model_data.setVectorRandValByLimits()
 
 
 
@@ -446,64 +622,78 @@ class BaseOptimizer(object):
             ...
 
 
+    def setVecItemType(
+        self,
+        index : int, 
+        new_type : Literal["float", "bool"], 
+        vec_dir : Literal["to_model", "from_model"] = "to_model",
+        *args, 
+        **kwargs
+     )  :
+        """
+        setVecItemType
+        ---
+        
+        Установка ограничения для параметра внутри вектора
+        """
+        if vec_dir == "to_model":
+            self._to_opt_model_data.setVecItemType(index = index, new_type = new_type, *args, **kwargs)
+        elif vec_dir == "from_model":
+            self._from_model_data.setVecItemType(index = index, new_type = new_type, *args, **kwargs)
+        else:
+            ...
 
+
+    def setPreSetCadidateVec(self, 
+                            candidate_index : int,
+                            vec : np.ndarray,
+                            vec_dir : Literal["to_model", "from_model"] = "to_model") -> None:
+        """
+        setPreSetCadidateVec
+        ---
+        Установка значений вектора кандидата по номеру кандидата
+        """
+        if vec_dir == "to_model":
+            self._to_opt_model_data.setPreSetCadidateVec(candidate_index = candidate_index, vec = vec)
+        elif vec_dir == "from_model":
+            self._from_model_data.setPreSetCadidateVec(candidate_index = candidate_index, vec = vec)
+        else:
+            ...
 
 
 
 # Отладка функционала базового генератора
 if __name__ == "__main__":
-    test_OptimizedVectorData = OptimizedVectorData(vec_size = 12, vec_candidates_size = 3, seed = time.time())
-    # test_OptimizedVectorData.setVectorsRandVal(0.0, 1.0)
-    test_OptimizedVectorData.setLimitation(4, 0.5, 1)
-    test_OptimizedVectorData.setLimitation(5, 0.5, 1)
-    test_OptimizedVectorData.setLimitation(6, 0.5, 1)
+    # test_floatItem = _floatItem(min = 1.23, max = 56.3, seed = 123)
+    # print(test_floatItem)
+    # print(test_floatItem._isWitihRange(154))
+    # print(test_floatItem._isWitihRange(4))
+    # print(test_floatItem.isCorrect(4))
+    # print(test_floatItem.isCorrect(4.0))
+    # print(test_floatItem.isCorrect(123))
+    # print(test_floatItem.isCorrect("Э"))
+
+    # test_OptimizedVectorData = OptimizedVectorData(vec_size = 12, vec_candidates_size = 5, seed = time.time())
+    # print("Initial")
+    # test_OptimizedVectorData.DEBUG_printInfo()
+    # test_OptimizedVectorData.setVecItemType(new_type="bool", index = 3)
+    # test_OptimizedVectorData.setVecItemType(new_type="bool", index = 8)
+    # test_OptimizedVectorData.setVecItemType(new_type="bool", index = 9)
+    # test_OptimizedVectorData.setLimitation(index= 3, min = 45, max = 75)
+    # test_OptimizedVectorData.setLimitation(index= 4, min = 45, max = 75)
+    # # test_OptimizedVectorData.setLimitation(index= 5, min = 485, max = 75)
+    # test_OptimizedVectorData.DEBUG_printInfo()
+    # test_OptimizedVectorData.setVectorRandValByLimits()
+    # test_OptimizedVectorData.DEBUG_printInfo()
+    
+    # print(test_OptimizedVectorData.getInLimitsMatrix())
+    # test_OptimizedVectorData._vec[3, 3] = 8
+    # test_OptimizedVectorData.DEBUG_printInfo()
+    # print(test_OptimizedVectorData.getInLimitsMatrix())
+    
+    test_OptimizedVectorData = OptimizedVectorData(vec_size = 12, vec_candidates_size = 5, seed = time.time())
     test_OptimizedVectorData.setVectorRandValByLimits()
-    for item in test_OptimizedVectorData.iterVectors():
-        print(item)
-        
-    print(test_OptimizedVectorData.getInLimitsMatrix())
-    
-    
-    
-    # test_BaseOptimizer = BaseOptimizer(
-    #     to_model_vec_size    = 5,
-    #     from_model_vec_size  = 4,
-    #     iter_limit           = 100,
-    # )
-    # print(test_BaseOptimizer._to_opt_model_data)
-    # print(test_BaseOptimizer.getResult())
-    
-    
-    # loc_vec = np.array([[1, 2, 3, 4]], dtype = float)
-    # print(loc_vec)
-    
-    # loc_vec = np.append(loc_vec, [8, 9, 10])
-    # loc_vec = np.extend(loc_vec, [[8, 9, 10, 114]], axis = 1)
-    # print(loc_vec)
-    
-    
-    # test_OptimizedVectorData = OptimizedVectorData(vec_size = 12, vec_candidates_size = 3)
-    # print(test_OptimizedVectorData)
-
-    # for item in test_OptimizedVectorData.iterVectors():
-    #     print(item)
-        
-    # test_OptimizedVectorData.setVectorsRandVal(0.0, 1.0)
-    # print(test_OptimizedVectorData)
-
-    # for item in test_OptimizedVectorData.iterVectors():
-    #     print(item)
-
-    # test_BaseOptimizer = BaseOptimizer(
-    #     to_model_vec_size    = 5,
-    #     from_model_vec_size  = 4,
-    #     iter_limit           = 100,
-    # )
-    # test_BaseOptimizer.modelOptimize(func = lambda: print(""))
-    # print(test_BaseOptimizer._to_opt_model_data.vec)
-    # print(test_BaseOptimizer._to_opt_model_data)
-    # print(test_BaseOptimizer.vecToModel)
-    # test_BaseOptimizer.vecToModel = 0
-    # print(test_BaseOptimizer.vecFromModel)
-    # test_BaseOptimizer.vecFromModel = np.array(np.zeros(76), dtype=float)
+    test_OptimizedVectorData.DEBUG_printInfo()
+    test_OptimizedVectorData.setPreSetCadidateVec(3, np.array(np.zeros(shape = 12)))
+    test_OptimizedVectorData.DEBUG_printInfo()
     pass

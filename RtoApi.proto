@@ -1,0 +1,110 @@
+syntax = "proto3";
+
+package Grpc.RtoApi;
+option csharp_namespace = "Grpc.RtoApi";
+
+//Запрос статуса сервиса
+message ArgRequest {
+  string accessToken = 1;
+}
+
+//Ответ на запрос статуса сервиса
+message ServiceStatus {
+  string serviceId = 1;
+  string status = 2;
+  string serviceType = 3;
+  string user = 4;
+  string message = 5;
+}
+
+message TagType {
+  string id = 1;
+  string name = 2;
+  string dataType = 3;     // Тип данных (Integer, Numeric, Bool)
+  double lower_bound = 4;  // Нижняя граница значения
+  double upper_bound = 5;  // Верхняя граница значения
+}
+
+// Значение тега (переменной)
+message TagVal {
+  string tagId = 1;        // Идентификатор тега (GUID)
+  uint64 timeStamp = 2;    // Временная метка
+  double numericValue = 3; // Числовое значение
+  bool isGood = 4;         // Флаг корректности значения
+}
+
+// Запрос на создание сессии оптимизации
+message StartRequest {
+  string accessToken = 1;
+  repeated TagType cvs = 2;            // Перечень CV
+  repeated TagType mvs = 3;            // Перечень MV
+  bool maximize = 4;                   // Флаг максимизации
+  string optimization_method = 5;      // Метод оптимизации
+  int32 max_iterations = 6;            // Максимальное число итераций
+  string model_id = 7;                 // Идентификатор модели
+}
+
+// Ответ на создание сессии
+message StartResponse {
+  string optimization_instance_id = 1; // ID созданной сессии
+  bool is_good = 2;                    // Флаг успешного создания
+  string message = 3;                  // Сообщение о результате
+}
+
+// Запрос на запуск/возобновление оптимизации
+message OptimizeIterationRequest {
+  string accessToken = 1;
+  string optimization_instance_id = 2; // ID сессии
+  repeated TagVal cv_values = 3;       // Значения CV
+  repeated TagVal mv_values = 4;       // Значения MV
+  TagVal objective_function_value = 5; // Значение целевой функции
+}
+
+// Ответ на запуск оптимизации
+message OptimizeIterationResponse {
+  repeated TagVal mv_values = 1;      // Вычисленное значения MV методом оптимизации
+  string sessionId = 2;               // ID сессии
+  int32 flag = 3;                     // Флаг состояния (-1 - ошибка, 0 - успех, 1 - возобновлено после паузы, 2 - уже выполняется)
+  string message = 4;                 // Сообщение о результате
+}
+
+// Запрос на паузу оптимизации
+message PauseRequest {
+  string accessToken = 1;
+  string sessionId = 2;               // ID сессии
+}
+
+// Ответ на паузу оптимизации
+message PauseResponse {
+  string message = 1;                 // Сообщение о результате
+  bool is_paused = 2;                 // Флаг успешной паузы
+}
+
+// Запрос на остановку сессии
+message StopRequest {
+  string accessToken = 1;
+  string sessionId = 2;               // ID сессии
+}
+
+// Ответ на остановку сессии
+message StopResponse {
+  string message = 1;                 // Сообщение о результате
+}
+
+// Сервис обработки данных RTO
+service RtoService {
+  // Функция получения статуса сервиса
+  rpc GetServiceStatus(ArgRequest) returns (ServiceStatus) {}
+
+  // Создает новую сессию оптимизации
+  rpc StartOptimizeSession (StartRequest) returns (StartResponse);
+
+  // Итерация одной сессии оптимизации
+  rpc OptimizeIteration (OptimizeIterationRequest) returns (OptimizeIterationResponse);
+
+  // Ставит оптимизацию на паузу
+  rpc Pause (PauseRequest) returns (PauseResponse);
+
+  // Останавливает и удаляет сессию
+  rpc Stop (StopRequest) returns (StopResponse);
+}
