@@ -8,7 +8,6 @@ class EvolutionaryOpt(BaseOptimizer):
                  offspring_per_parent: int = 5, mutation_prob: float = 0.1,
                  sigma_init: float = 0.1, t_max: int = 100, 
                  discrete_indices: List[int] = None, *args, **kwargs):
-        print("EvolutionaryOpt params:", population_size, offspring_per_parent, mutation_prob, sigma_init, t_max)
         # Выделяем параметры для BaseOptimizer
         base_kwargs = {
             'to_model_vec_size': kwargs.pop('to_model_vec_size', dimension),
