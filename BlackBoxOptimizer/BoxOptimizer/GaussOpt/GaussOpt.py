@@ -46,7 +46,7 @@ class GaussOpt(BaseOptimizer):
 
     
     @staticmethod
-    def _expected_improvement(x, model, y_opt, maximize, output_bounds, penalty_coef=1e2):
+    def _expected_improvement(x, model, y_opt, maximize):
         x = np.array(x).reshape(1, -1)
         mu, sigma = model.predict(x, return_std=True)   # shapes (1, m), (1, m)
         mu, sigma = mu.flatten(), sigma.flatten()       # теперь 1-D длины m
@@ -58,13 +58,6 @@ class GaussOpt(BaseOptimizer):
             Z = imp / sigma[0]
             ei[0] = imp * norm.cdf(Z) + sigma[0] * norm.pdf(Z)
 
-        # штрафы для остальных компонентов (1…m-1)
-        for i, (lb, ub) in enumerate(output_bounds, start=1):
-            if mu[i] < lb:
-                ei[0] -= penalty_coef * (lb - mu[i])**2
-            elif mu[i] > ub:
-                ei[0] -= penalty_coef * (mu[i] - ub)**2
-
         # безопасно зануляем EI, если σ[0]==0
         ei[0] = np.where(sigma[0] == 0.0, 0.0, ei[0])
 
@@ -73,15 +66,34 @@ class GaussOpt(BaseOptimizer):
     """Функция максимального правдоподобия"""
 
     def _propose_location(self):
-        y_opt = self.res_of_most_opt_vec
+        y_opt    = self.res_of_most_opt_vec
         maximize = self.target_to_opt
-        func = lambda x: self._expected_improvement(x, self.model, y_opt, maximize, output_bounds=self.output_bound_of_vec, penalty_coef=1e2)
-        res = minimize(fun=func,
-                       bounds=self.input_bound_of_vec,
-                       x0=self.most_opt_vec,
-                       method='Nelder-Mead',
-                       tol=1e-6
-                       )
+        # базовая функция (EI)
+        func = lambda x: self._expected_improvement(x, self.model, y_opt, maximize)
+
+        # создаём список ограничений на каждый выход beyond bounds
+        constraints = []
+        # model.predict возвращает [f, g1, g2, ...], где g — вторые выходы
+        for i, (lb, ub) in enumerate(self.output_bound_of_vec):
+            # g_i(x) >= lb  ⇒  g_i(x) - lb ≥ 0
+            constraints.append({
+                'type': 'ineq',
+                'fun': lambda x, i=i, lb=lb:  self.model.predict(x.reshape(1, -1))[0, i] - lb
+            })
+            # g_i(x) ≤ ub  ⇒  ub - g_i(x) ≥ 0
+            constraints.append({
+                'type': 'ineq',
+                'fun': lambda x, i=i, ub=ub: ub - self.model.predict(x.reshape(1, -1))[0, i]
+            })
+
+        res = minimize(
+            fun=func,
+            x0 = self.most_opt_vec,
+            bounds=self.input_bound_of_vec,
+            constraints=constraints,
+            method='SLSQP',
+            options={'ftol':1e-6, 'maxiter':100}
+        )
         return res.x
     """Функция высчитывающая следущую точку для подсчета"""
 
@@ -106,36 +118,37 @@ class GaussOpt(BaseOptimizer):
         return bounds
     """Функция возращяющая массив минимумов и максимумов вида [[min1, max1],[min2, max2]...]"""
 
-    def _penalize_fitness(self, fitness, output_values):
-        """Штрафование fitness при нарушении ограничений выходных переменных"""
-        penalty = 0
-        output_params = output_values[1:] if len(output_values) > 1 else []
+    # def _penalize_fitness(self, fitness, output_values):
+    #     """Штрафование fitness при нарушении ограничений выходных переменных"""
+    #     penalty = 0
+    #     output_params = output_values[1:] if len(output_values) > 1 else []
         
-        for i in range(min(len(output_params), len(self.output_bound_of_vec))):
-            if not np.isinf(self.output_bound_of_vec[i][0]):
-                penalty += max(self.output_bound_of_vec[i][0] - output_params[i], 0)**2
+    #     for i in range(min(len(output_params), len(self.output_bound_of_vec))):
+    #         if not np.isinf(self.output_bound_of_vec[i][0]):
+    #             penalty += max(self.output_bound_of_vec[i][0] - output_params[i], 0)**2
                 
-        for i in range(min(len(output_params), len(self.output_bound_of_vec))):
-            if not np.isinf(self.output_bound_of_vec[i][1]):
-                penalty += max(output_params[i] - self.output_bound_of_vec[i][1], 0)**2
+    #     for i in range(min(len(output_params), len(self.output_bound_of_vec))):
+    #         if not np.isinf(self.output_bound_of_vec[i][1]):
+    #             penalty += max(output_params[i] - self.output_bound_of_vec[i][1], 0)**2
                 
-        return fitness + 1e1 * penalty
+    #     return fitness + 1e2 * penalty
 
     def _init_vecs(self,population):
             if self._seed is not None:
                 np.random.seed(self._seed)
-            first_vec = self._to_opt_model_data.vecs.reshape(1, self._to_model_vec_size)
-            length = first_vec.shape[0]
-            factors = np.random.uniform(0.95,1.05, size=(self._to_model_vec_size*population,length))
-            init_vecs = factors * first_vec
-
-            for vec in init_vecs:
-                vec[self.discrete_indices] = np.random.rand()
-
-            return init_vecs
+            # Преобразуем входные данные в numpy array для удобства
+            constraints = np.asarray(self.input_bound_of_vec)
+            # Генерируем данные для каждой компоненты отдельно
+            components = [
+                np.random.uniform(low=min_max[0], high=min_max[1], size=population*self._to_model_vec_size)
+                for min_max in constraints
+            ]
+            
+            # Транспонируем результат, чтобы векторы были строками матрицы
+            return np.column_stack(components)
     """Создание первой популяции векторов для нормальной работы метода, необходимо 10*количество MV"""
 
-    def _main_calc_func(self, func: Callable[[np.ndarray], np.ndarray]):
+    def _main_calc_func(self, func: Callable[[np.ndarray], np.ndarray]): 
         self.model.fit(self.history_to_opt_model_data,self.res_history_to_opt_model_data)
         next_x = self._propose_location()
         self.history_to_opt_model_data = np.vstack([self.history_to_opt_model_data, next_x.copy()])
@@ -144,8 +157,6 @@ class GaussOpt(BaseOptimizer):
         for idx in self.discrete_indices:
             next_x_for_fun[idx] = 1 if next_x_for_fun[idx]>=0.5 else 0
         output_value = func(next_x_for_fun)
-        if not self._check_output_constraints(output_value):
-                output_value[0] = self._penalize_fitness(output_value[0], output_value)
         self.res_history_to_opt_model_data.append(output_value)
         if self.target_to_opt:
             self.res_of_most_opt_vec = max(output_value[0], self.res_of_most_opt_vec)
@@ -190,6 +201,8 @@ class GaussOpt(BaseOptimizer):
     """Настройка метода"""
 
     def modelOptimize(self, func : Callable[[np.array], np.array]) -> None:
+        self.input_bound_of_vec = self._bound_func_("to_model")
+        self.output_bound_of_vec = self._bound_func_("from_model")
 
         discrete_indices = []
         for i, prop in enumerate(self._to_opt_model_data._values_properties_list):
@@ -201,7 +214,7 @@ class GaussOpt(BaseOptimizer):
         self.discrete_indices = list(set(discrete_indices))  # Удаляем дубликаты
 
         
-        self.history_to_opt_model_data = self._init_vecs(10)
+        self.history_to_opt_model_data = self._init_vecs(20)
         #print(self.history_to_opt_model_data)
         history_for_fun = self.history_to_opt_model_data
         for vec in history_for_fun:
@@ -212,8 +225,6 @@ class GaussOpt(BaseOptimizer):
 
         for vec in history_for_fun:
             output_value = func(vec)
-            if not self._check_output_constraints(output_value):
-                output_value[0] = self._penalize_fitness(output_value[0], output_value)
             res_list.append(output_value)
 
         self.res_history_to_opt_model_data = res_list
@@ -238,4 +249,8 @@ class GaussOpt(BaseOptimizer):
             result[idx] = 1 if result[idx]>=0.5 else 0
         return result
     """Функция результата, возращает точку"""
-    
+
+    def get_y(self):
+        result = self.most_opt_vec
+        i = np.where((self.history_to_opt_model_data == result).all(axis=1))[0][0]
+        return self.res_history_to_opt_model_data[i]
