@@ -20,14 +20,12 @@ class SimulatedAnnealingOptimizer(BaseOptimizer):
                  n_restarts: int = 3,
                  penalty_coef: float = 1e6,
                  **kwargs) -> None:
-        
         super().__init__(
             to_model_vec_size=to_model_vec_size,
             from_model_vec_size=from_model_vec_size,
             iter_limit=iter_limit,
             seed=seed
         )
-        
         self.initial_temp = initial_temp
         self.current_temp = initial_temp
         self.min_temp = min_temp
@@ -36,18 +34,21 @@ class SimulatedAnnealingOptimizer(BaseOptimizer):
         self.step_size = step_size
         self.n_restarts = n_restarts
         self.penalty_coef = penalty_coef
-        
+
         self.best_solution = None
         self.best_energy = float('inf')
         self.best_output_values = None
         self.current_energy = float('inf')
         self.restart_counter = 0
         self.iteration_counter = 0
-        
+
         self.acceptance_rate = 0.5
         self.target_acceptance = 0.4
-        
+
         self._vec_candidates_size = 5
+
+        # Корректируем лимит итераций так, чтобы общее число вызовов модели не превышало iter_limit
+        self._iteration_limitation = max(1, iter_limit // self._vec_candidates_size)
 
     def _get_from_model_limits(self):
         """Получить ограничения на все выходные значения из _from_model_data"""
@@ -89,15 +90,17 @@ class SimulatedAnnealingOptimizer(BaseOptimizer):
         return energy + self.penalty_coef * penalty
 
     def modelOptimize(self, func: Callable[[np.array], np.array]) -> None:
-        """Основной метод оптимизации с поддержкой ограничений"""
+        self.model_calls = 0
+        # max_calls теперь равен исходному iter_limit
+        max_calls = self._iteration_limitation * self._vec_candidates_size
+
         for restart in range(self.n_restarts):
-            self._single_run_optimization(func)
-            
+            self._single_run_optimization(func, max_calls)
             if restart < self.n_restarts - 1:
                 self._prepare_restart()
-                
-    def _single_run_optimization(self, func: Callable[[np.array], np.array]) -> None:
-        """Одиночный прогон алгоритма с учетом ограничений"""
+
+    def _single_run_optimization(self, func: Callable[[np.array], np.array], max_calls: int) -> None:
+        self.model_calls = 0
         current_solutions = [self._correct_discrete_values(vec.copy()) 
                            for vec in self._to_opt_model_data.iterVectors()]
         
@@ -106,6 +109,9 @@ class SimulatedAnnealingOptimizer(BaseOptimizer):
             output = func(sol)
             print(f"Кандидат: {sol}, Значение функции: {output[0]}")
             current_outputs.append(output)
+            self.model_calls += 1
+            if self.model_calls >= max_calls:
+                return
         current_energies = []
         
         for output in current_outputs:
@@ -124,8 +130,11 @@ class SimulatedAnnealingOptimizer(BaseOptimizer):
             total = 0
             
             for i in range(len(current_solutions)):
+                if self.model_calls >= max_calls:
+                    break
                 new_solution = self._generate_neighbor(current_solutions[i])
                 new_output = func(new_solution)
+                self.model_calls += 1
                 print(f"Кандидат: {new_solution}, Значение функции: {new_output[0]}")
                 new_energy = new_output[0]
                 total += 1

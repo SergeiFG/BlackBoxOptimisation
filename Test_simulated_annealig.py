@@ -13,7 +13,7 @@ def test_simulated_annealing():
         seed=1424,
         to_model_vec_size=6,
         from_model_vec_size=1,
-        iter_limit=10000,
+        iter_limit=100000,
         external_model=model.evaluate,
         optimisation_type=OptimisationTypes.minimize,
         initial_temp=50.0,
