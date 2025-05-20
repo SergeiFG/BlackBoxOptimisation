@@ -8,11 +8,14 @@ def test_simulated_annealing():
     dimension = len(target_point)
     model = SquareSumModel(-target_point)
     
+    output_lower_bounds = [2, -np.inf]  # Нижняя граница для первого выходного параметра 
+    output_upper_bounds = [100, np.inf]  # Верхняя граница для первого выходного параметра
+    
     opt = Optimizer(
         optCls=SimulatedAnnealingOptimizer,
         seed=1424,
         to_model_vec_size=6,
-        from_model_vec_size=3,
+        from_model_vec_size=1,
         iter_limit=10000,
         external_model=model.evaluate,
         optimisation_type=OptimisationTypes.minimize,
@@ -20,16 +23,17 @@ def test_simulated_annealing():
         min_temp=1e-5,
         cooling_rate=0.98,
         step_size=0.8,
+        output_lower_bounds=output_lower_bounds, 
+        output_upper_bounds=output_upper_bounds,  
+        penalty_coef=1e6  
     )
     
-    for i in range(dimension):
-        opt.setVecItemLimit(i, "to_model", min=-5, max=21)
-    opt.setVecItemLimit(0, vec_dir="to_model",min=0, max=100)
-    opt.setVecItemLimit(1, vec_dir="to_model",min=0, max=100)
-    opt.setVecItemLimit(2, vec_dir="to_model",min=0, max=100)
-    opt.setVecItemType(3, vec_dir="to_model",new_type="bool")
-    opt.setVecItemType(4, vec_dir="to_model",new_type="bool")
-    opt.setVecItemType(5, vec_dir="to_model",new_type="bool")
+    opt.setVecItemLimit(0, vec_dir="to_model", min=0, max=100)
+    opt.setVecItemLimit(1, vec_dir="to_model", min=0, max=100)
+    opt.setVecItemLimit(2, vec_dir="to_model", min=0, max=100)
+    opt.setVecItemType(3, vec_dir="to_model", new_type="bool")
+    opt.setVecItemType(4, vec_dir="to_model", new_type="bool")
+    opt.setVecItemType(5, vec_dir="to_model", new_type="bool")
     
     initial_guess = np.array([10.0, 10.0, 10.0, 0.0, 0.0, 0.0])
     opt.setPreSetCadidateVec(0, initial_guess)
@@ -37,8 +41,8 @@ def test_simulated_annealing():
     opt.modelOptimize()
     
     result = opt.getResult()
-
-    final_value = model.evaluate(result)[0]
+    output_values = model.evaluate(result)
+    final_value = output_values[0]
     calls_count = opt.get_usage_count()
     
     print("\nРезультаты оптимизации:")
@@ -48,6 +52,7 @@ def test_simulated_annealing():
     print(f"Число вызовов модели: {calls_count}")
     print(f"Отклонение от оптимума: {np.linalg.norm(np.array(result) - target_point):.6f}")
     print(f"Отклонение значения функции: {(final_value - model.func(target_point)):.10f}")
+
 
 if __name__ == "__main__":
     test_simulated_annealing()
