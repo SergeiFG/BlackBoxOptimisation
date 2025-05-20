@@ -18,8 +18,6 @@ class SimulatedAnnealingOptimizer(BaseOptimizer):
                  cooling_rate: float = 0.99,
                  step_size: float = 1.0,
                  n_restarts: int = 3,
-                 output_lower_bounds: Optional[List[float]] = None,
-                 output_upper_bounds: Optional[List[float]] = None,
                  penalty_coef: float = 1e6,
                  **kwargs) -> None:
         
@@ -37,10 +35,6 @@ class SimulatedAnnealingOptimizer(BaseOptimizer):
         self.initial_step_size = step_size
         self.step_size = step_size
         self.n_restarts = n_restarts
-        
-        # Ограничения на выходные значения
-        self.output_lower_bounds = np.array(output_lower_bounds) if output_lower_bounds is not None else np.array([])
-        self.output_upper_bounds = np.array(output_upper_bounds) if output_upper_bounds is not None else np.array([])
         self.penalty_coef = penalty_coef
         
         self.best_solution = None
@@ -55,6 +49,15 @@ class SimulatedAnnealingOptimizer(BaseOptimizer):
         
         self._vec_candidates_size = 5
 
+    def _get_from_model_limits(self):
+        """Получить ограничения на все выходные значения из _from_model_data"""
+        min_bounds = []
+        max_bounds = []
+        for prop in self._from_model_data._values_properties_list:
+            min_bounds.append(prop.min if prop.min is not None else -np.inf)
+            max_bounds.append(prop.max if prop.max is not None else np.inf)
+        return min_bounds, max_bounds
+
     def _correct_discrete_values(self, solution: np.array) -> np.array:
         """Корректирует дискретные значения в решении"""
         corrected = solution.copy()
@@ -67,38 +70,22 @@ class SimulatedAnnealingOptimizer(BaseOptimizer):
         return corrected
 
     def _check_output_constraints(self, output_values: np.ndarray) -> bool:
-        """Проверка соблюдения ограничений на выходные значения"""
-        if len(output_values) <= 1 or len(self.output_lower_bounds) == 0:
-            return True
-            
-        output_params = output_values[1:]
-        
-        for i in range(min(len(output_params), len(self.output_lower_bounds))):
-            if output_params[i] < self.output_lower_bounds[i]:
+        """Проверка соблюдения ограничений на все выходные значения"""
+        min_bounds, max_bounds = self._get_from_model_limits()
+        for i in range(min(len(output_values), len(min_bounds))):
+            if output_values[i] < min_bounds[i] or output_values[i] > max_bounds[i]:
                 return False
-                
-        for i in range(min(len(output_params), len(self.output_upper_bounds))):
-            if output_params[i] > self.output_upper_bounds[i]:
-                return False
-                
         return True
 
     def _apply_penalty(self, energy: float, output_values: np.ndarray) -> float:
         """Применение штрафа к целевой функции при нарушении ограничений"""
-        if len(output_values) <= 1 or len(self.output_lower_bounds) == 0:
-            return energy
-            
+        min_bounds, max_bounds = self._get_from_model_limits()
         penalty = 0.0
-        output_params = output_values[1:]
-        
-        for i in range(min(len(output_params), len(self.output_lower_bounds))):
-            if output_params[i] < self.output_lower_bounds[i]:
-                penalty += (self.output_lower_bounds[i] - output_params[i])**2
-                
-        for i in range(min(len(output_params), len(self.output_upper_bounds))):
-            if output_params[i] > self.output_upper_bounds[i]:
-                penalty += (output_params[i] - self.output_upper_bounds[i])**2
-                
+        for i in range(min(len(output_values), len(min_bounds))):
+            if output_values[i] < min_bounds[i]:
+                penalty += (min_bounds[i] - output_values[i])**2
+            if output_values[i] > max_bounds[i]:
+                penalty += (output_values[i] - max_bounds[i])**2
         return energy + self.penalty_coef * penalty
 
     def modelOptimize(self, func: Callable[[np.array], np.array]) -> None:
@@ -114,7 +101,11 @@ class SimulatedAnnealingOptimizer(BaseOptimizer):
         current_solutions = [self._correct_discrete_values(vec.copy()) 
                            for vec in self._to_opt_model_data.iterVectors()]
         
-        current_outputs = [func(sol) for sol in current_solutions]
+        current_outputs = []
+        for sol in current_solutions:
+            output = func(sol)
+            print(f"Кандидат: {sol}, Значение функции: {output[0]}")
+            current_outputs.append(output)
         current_energies = []
         
         for output in current_outputs:
@@ -135,6 +126,7 @@ class SimulatedAnnealingOptimizer(BaseOptimizer):
             for i in range(len(current_solutions)):
                 new_solution = self._generate_neighbor(current_solutions[i])
                 new_output = func(new_solution)
+                print(f"Кандидат: {new_solution}, Значение функции: {new_output[0]}")
                 new_energy = new_output[0]
                 total += 1
                 

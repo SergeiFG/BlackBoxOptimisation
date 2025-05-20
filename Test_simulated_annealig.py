@@ -8,9 +8,6 @@ def test_simulated_annealing():
     dimension = len(target_point)
     model = SquareSumModel(-target_point)
     
-    output_lower_bounds = [2, -np.inf]  # Нижняя граница для первого выходного параметра 
-    output_upper_bounds = [100, np.inf]  # Верхняя граница для первого выходного параметра
-    
     opt = Optimizer(
         optCls=SimulatedAnnealingOptimizer,
         seed=1424,
@@ -23,8 +20,6 @@ def test_simulated_annealing():
         min_temp=1e-5,
         cooling_rate=0.98,
         step_size=0.8,
-        output_lower_bounds=output_lower_bounds, 
-        output_upper_bounds=output_upper_bounds,  
         penalty_coef=1e6  
     )
     
@@ -35,6 +30,9 @@ def test_simulated_annealing():
     opt.setVecItemType(4, vec_dir="to_model", new_type="bool")
     opt.setVecItemType(5, vec_dir="to_model", new_type="bool")
     
+    opt.setVecItemLimit(1, vec_dir="from_model", min=2, max=100)
+
+
     initial_guess = np.array([10.0, 10.0, 10.0, 0.0, 0.0, 0.0])
     opt.setPreSetCadidateVec(0, initial_guess)
     
