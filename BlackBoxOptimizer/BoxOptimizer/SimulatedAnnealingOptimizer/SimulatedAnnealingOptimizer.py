@@ -6,6 +6,7 @@ from ..BaseOptimizer import BaseOptimizer, _boolItem, _floatItem
 class SimulatedAnnealingOptimizer(BaseOptimizer):
     """
     Улучшенная реализация алгоритма имитации отжига с поддержкой ограничений на выходные значения
+    и архивацией всех кандидатов и значений функции
     """
 
     def __init__(self, 
@@ -46,9 +47,13 @@ class SimulatedAnnealingOptimizer(BaseOptimizer):
         self.target_acceptance = 0.4
 
         self._vec_candidates_size = 5
-
-        # Корректируем лимит итераций так, чтобы общее число вызовов модели не превышало iter_limit
-        self._iteration_limitation = max(1, iter_limit // self._vec_candidates_size)
+        
+        # Архив для хранения всех кандидатов и значений функции
+        self._archive_vectors = []
+        self._archive_energies = []
+        self._archive_outputs = []
+        
+        self._iteration_limitation = max(1, iter_limit)
 
     def _get_from_model_limits(self):
         """Получить ограничения на все выходные значения из _from_model_data"""
@@ -91,8 +96,10 @@ class SimulatedAnnealingOptimizer(BaseOptimizer):
 
     def modelOptimize(self, func: Callable[[np.array], np.array]) -> None:
         self.model_calls = 0
-        # max_calls теперь равен исходному iter_limit
-        max_calls = self._iteration_limitation * self._vec_candidates_size
+        max_calls = self._iteration_limitation
+        self._archive_vectors = []  # Очищаем архив перед новой оптимизацией
+        self._archive_energies = []
+        self._archive_outputs = []
 
         for restart in range(self.n_restarts):
             self._single_run_optimization(func, max_calls)
@@ -107,11 +114,16 @@ class SimulatedAnnealingOptimizer(BaseOptimizer):
         current_outputs = []
         for sol in current_solutions:
             output = func(sol)
-            print(f"Кандидат: {sol}, Значение функции: {output[0]}")
+            
+            # Добавляем в архив
+            self._archive_vectors.append(sol.copy())
+            self._archive_outputs.append(output.copy())
+            
             current_outputs.append(output)
             self.model_calls += 1
             if self.model_calls >= max_calls:
                 return
+                
         current_energies = []
         
         for output in current_outputs:
@@ -119,6 +131,9 @@ class SimulatedAnnealingOptimizer(BaseOptimizer):
             if not self._check_output_constraints(output):
                 energy = self._apply_penalty(energy, output)
             current_energies.append(energy)
+        
+        # Добавляем энергии в архив
+        self._archive_energies.extend(current_energies)
         
         best_idx = np.argmin(current_energies)
         self.best_solution = current_solutions[best_idx].copy()
@@ -134,13 +149,20 @@ class SimulatedAnnealingOptimizer(BaseOptimizer):
                     break
                 new_solution = self._generate_neighbor(current_solutions[i])
                 new_output = func(new_solution)
+                
+                # Добавляем в архив
+                self._archive_vectors.append(new_solution.copy())
+                self._archive_outputs.append(new_output.copy())
+                
                 self.model_calls += 1
-                print(f"Кандидат: {new_solution}, Значение функции: {new_output[0]}")
                 new_energy = new_output[0]
                 total += 1
                 
                 if not self._check_output_constraints(new_output):
                     new_energy = self._apply_penalty(new_energy, new_output)
+                
+                # Добавляем энергию в архив
+                self._archive_energies.append(new_energy)
                 
                 if self._accept_solution(current_energies[i], new_energy):
                     current_solutions[i] = new_solution.copy()
@@ -240,3 +262,18 @@ class SimulatedAnnealingOptimizer(BaseOptimizer):
 
     def getResult(self) -> np.array:
         return self.best_solution
+        
+    def get_archive(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """
+        Возвращает архив всех кандидатов, значений функции и выходных значений
+        Returns:
+            Tuple[np.ndarray, np.ndarray, np.ndarray]: 
+                - Массив всех векторов-кандидатов (n_samples x n_features)
+                - Массив значений функции для каждого кандидата (n_samples,)
+                - Массив выходных значений модели для каждого кандидата (n_samples x n_outputs)
+        """
+        return (
+            np.array(self._archive_vectors),
+            np.array(self._archive_energies),
+            np.array(self._archive_outputs)
+        )
