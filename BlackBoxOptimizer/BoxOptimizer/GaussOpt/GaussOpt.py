@@ -266,7 +266,7 @@ class GaussOpt(BaseOptimizer):
         result = self.most_opt_vec
         true_result = self.scaler_x.inverse_transform([result])
         for idx in self.discrete_indices:
-            true_result[idx] = 1 if result[idx]>=0.5 else 0
+            true_result[0,idx] = 1 if result[idx]>=0.5 else 0
         return true_result[0]
     """Функция результата, возращает точку"""
 
