@@ -3,15 +3,14 @@ from BlackBoxOptimizer.BoxOptimizer.Genetic_Algo import Genetic_Algo
 import numpy as np
 from Models import SquareSumModel
 
-class GeneticAlgoTest:
+class Constrained_Gen_Algo_test:
     def __init__(self):
         # Целевая точка (первые 3 параметра для SquareSumModel)
-        self.target_continuous = np.array([-7, 20, 10, 7, 26])
-        self.target_discrete = np.array([0, 0])  # Дополнительные дискретные параметры
-        self.dimension = 7  # 3 непрерывных + 2 дискретных
+        self.target = np.array([135.123, 505.23121, -206.876, 0, 0])
+        self.dimension = 5  # 3 непрерывных + 2 дискретных
         
         # Инициализация модели (работает только с первыми 3 параметрами)
-        self.model = SquareSumModel(-self.target_continuous)
+        self.model = SquareSumModel(-self.target[:3])
         
         # Инициализация оптимизатора
         self.optimizer = Optimizer(
@@ -19,79 +18,59 @@ class GeneticAlgoTest:
             seed=42,
             to_model_vec_size=self.dimension,
             from_model_vec_size=1,  # SquareSumModel возвращает только ошибку
-            iter_limit=100,
+            iter_limit=50,
             external_model=self._adapted_model_evaluate,  # Используем адаптер
-            # Параметры для GeneticAlgoritm
-            opt_params={
-                'dimension': self.dimension,
-                'population_size': 200,
-                'generations': 50,
-                'init_mutation': 0.6,
-                'min_mutation': 0.01,
-                'elite_size': 5,
-                'output_lower_bounds': [0, 0, 0, 0, 0],
-                'output_upper_bounds': [np.inf, 2, 4, np.inf, np.inf],
-                'discrete_indices': [5, 6]  # Булевые параметры
-            }
+            # Параметры для EvolutionaryOpt
+            population_size = 100,
+            init_mutation = 0.5,
+            min_mutation = 0.05,
+            elite_size = 5,
+            discrete_indices = [3, 4]
         )
         
         # Установка ограничений
-        for i in range(5):  # Первые 5 параметра - непрерывные
-            self.optimizer.setVecItemLimit(i, "to_model", min=-5, max=21)
+        for i in range(3):  # Первые 3 параметра - непрерывные
+            self.optimizer.setVecItemLimit(i, "to_model", min=-250, max=500)
+         #   self.optimizer.setVecItemLimit(i, "to_model", min=-np.inf, max=np.inf)
         
-        for i in range(5, 7):  # Последние 2 параметра - дискретные
+        for i in range(3, 5):  # Последние 2 параметра - дискретные
             self.optimizer.setVecItemType(i, "bool", "to_model")
             self.optimizer.setVecItemLimit(i, "to_model", min=0, max=1)
 
     def _adapted_model_evaluate(self, x):
-        """Адаптер для модели, передает только первые 3 параметра"""
-        return self.model.evaluate(x[:5])
+        """Адаптер для модели, передает только первые 3 параметра, потом добавляет по 100 к целевой
+        функции за каждый неверный дискретный параметр"""
+        discrete_error = 100 * np.sum(x[3:] != self.target[3:])
+        return self.model.evaluate(x[:3]) + np.array(discrete_error)
 
-    def evaluate_full(self, x):
-        """Полная оценка решения с учетом всех параметров"""
-        model_error = self.model.evaluate(x[:5])[0]  # Ошибка от SquareSumModel
-        discrete_error = np.sum((x[5:] - self.target_discrete)**2)  # Ошибка дискретных параметров
-        return model_error + discrete_error
-
-    def calculate_constrained_solution(self, x):
-        """Вычисление 'реального' решения с учетом ограничений"""
-        constrained = np.array([
-            np.clip(x[0], -5, 21),
-            np.clip(x[1], -5, 21),
-            np.clip(x[2], -5, 21),
-            np.clip(x[3], -5, 21),
-            np.clip(x[4], -5, 21)
-        ])
-        discrete = np.array([1 if x[5] >= 0.5 else 0, 1 if x[6] >= 0.5 else 0])
-        return np.concatenate([constrained, discrete])
 
     def run(self):
-        print("=== Тест генетического алгоритма с дискретными и непрерывными параметрами ===")
-        print(f"Целевые значения непрерывных параметров: {self.target_continuous}")
-        print(f"Целевые значения дискретных параметров: {self.target_discrete}")
+        print("=== Тест генетического алгоритма с ограничениями и дискретными параметрами ===")
+        print(f"Целевые непрерывные значения: {self.target[:3]}")
+        print(f"Целевые дискретные значения: {self.target[3:]}")
+        print(f"Индексы дискретных параметров: [3, 4] (должны быть 0 или 1)")
             
         try:
             self.optimizer.modelOptimize()
             ep_optimizer = self.optimizer.getOptimizer()
             best_solution = ep_optimizer._to_opt_model_data.vecs[:, 0]
-            constrained_solution = self.calculate_constrained_solution(best_solution)
             
-            final_error = self.evaluate_full(constrained_solution)
+            final_error = self._adapted_model_evaluate(best_solution)
             
-            print("\n=== Результат ===")
-            print(f"Лучший результат: {np.round(best_solution, 4)}")
-            print(f"Суммарная ошибка лучшего результата: {final_error:.6f}")
-            print(f"Непрерывные параметры лучшего результата: {constrained_solution[:5]}")
-            print(f"Дискретные параметры лучшего результата: {constrained_solution[5:]}")
+            print("\n=== Результаты ===")
+            print(f"Лучшее решение: {np.round(best_solution, 4)}")
+            print(f"Финальная ошибка: {final_error[0]}")
+            print(f"Непрерывная часть: {best_solution[:3]}")
+            print(f"Дискретная часть: {best_solution[3:]}")
             
-            print("\nПроверка соблюдения границ:")
-            print(f"Непрерывные параметры в границах: {np.all(constrained_solution[:5] >= -5) & np.all(constrained_solution[:5] <= 21)}")
-            print(f"Дискретные параметры принимают значения 0 или 1: {constrained_solution[5] in [0, 1] and constrained_solution[6] in [0, 1]}")
+            print("\nПроверка ограничений:")
+            print(f"Непрерывные в пределах: {np.all(best_solution[:3] >= -250) & np.all(best_solution[:3] <= 500)}")
+            print(f"Дискретные бинарные: {best_solution[3] in [0, 1] and best_solution[4] in [0, 1]}")
 
         except Exception as e:
             print(f"Ошибка оптимизации: {str(e)}")
             raise
 
 if __name__ == "__main__":
-    test = GeneticAlgoTest()
+    test = Constrained_Gen_Algo_test()
     test.run()
