@@ -23,7 +23,7 @@ if __name__ == "__main__":
         seed                = 146, # TODO: Проверить, точно ли работает. Сейчас выдаёт разные значения при одном seed
         to_model_vec_size   = 6,
         from_model_vec_size = 3,
-        iter_limit          = 200,
+        iter_limit          = 10,
         external_model = model.evaluate,
         # user_function = lambda x: x[0],
         optimisation_type = OptimisationTypes.minimize,
@@ -35,9 +35,9 @@ if __name__ == "__main__":
     opt.setVecItemType(4, "bool", "to_model")
     opt.setVecItemType(5, "bool", "to_model")
     for i in range(4):
-        opt.setVecItemLimit(i, "to_model", -4, 6)
+        opt.setVecItemLimit(i, "to_model", -10, 10)
     for i in range(4):
-        opt.setVecItemLimit(i, "from_model", -1, 1.9)
+        opt.setVecItemLimit(i, "from_model", -10, 10)
     # Запуск оптимизации
     opt.modelOptimize()
     currentOptimizer = opt.getOptimizer()
@@ -50,7 +50,6 @@ if __name__ == "__main__":
     print('Результат')
     print(currentOptimizer.getResult())
     print(model.evaluate(currentOptimizer.getResult()))
-    print(currentOptimizer.get_y())
 
 
 
