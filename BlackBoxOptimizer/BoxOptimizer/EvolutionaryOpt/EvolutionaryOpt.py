@@ -25,6 +25,7 @@ class EvolutionaryOpt(BaseOptimizer):
         self.sigma_init = sigma_init
         self.t_max = t_max
         self.discrete_indices = discrete_indices if discrete_indices is not None else []
+        self.optimization_history = None  # Для хранения истории оптимизации
 
     def configure(self, **kwargs):
         super().configure(**kwargs)
@@ -83,11 +84,41 @@ class EvolutionaryOpt(BaseOptimizer):
             discrete_indices=discrete_indices
         )
         
-        best_x, best_f = ep.run()
+        best_x, best_f, history = ep.run()
+        self.optimization_history = history  # Сохраняем историю оптимизации
 
         # Записываем best_x в контейнер BaseOptimizer
         for to_vec in self._to_opt_model_data.iterVectors():
             to_vec[:] = best_x
+
+    def get_optimization_history(self):
+        """Возвращает историю оптимизации в виде списка словарей"""
+        return self.optimization_history
+
+    def get_history_as_dataframe(self):
+        """Возвращает историю оптимизации в виде DataFrame (требует pandas)"""
+        import pandas as pd
+        return pd.DataFrame(self.optimization_history)
+
+    def plot_optimization_history(self):
+        """Визуализирует историю оптимизации (требует matplotlib)"""
+        if not self.optimization_history:
+            raise ValueError("История оптимизации пуста. Сначала запустите modelOptimize.")
+            
+        import matplotlib.pyplot as plt
+        generations = [entry['generation'] for entry in self.optimization_history]
+        best_fitness = [entry['best_fitness'] for entry in self.optimization_history]
+        avg_fitness = [entry['average_fitness'] for entry in self.optimization_history]
+        
+        plt.figure(figsize=(10, 6))
+        plt.plot(generations, best_fitness, 'b-', label='Лучшее значение')
+        plt.plot(generations, avg_fitness, 'g--', label='Среднее значение')
+        plt.xlabel('Поколение')
+        plt.ylabel('Значение функции')
+        plt.title('История оптимизации')
+        plt.legend()
+        plt.grid(True)
+        plt.show()
 
     def getResult(self) -> np.ndarray:
         historical_data = self.getHistoricalData("vec_to_model")
