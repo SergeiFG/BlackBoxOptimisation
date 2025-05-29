@@ -50,7 +50,7 @@ class EvolutionaryProgramming:
             else:
                 lower = self.lower_bounds[i] if not np.isinf(self.lower_bounds[i]) else -1e10
                 upper = self.upper_bounds[i] if not np.isinf(self.upper_bounds[i]) else 1e10
-                population[:, i] = 10*np.random.uniform(lower, upper, self.population_size)
+                population[:, i] = np.random.uniform(lower, upper, self.population_size)
         return population
 
     def _enforce_bounds(self, x):

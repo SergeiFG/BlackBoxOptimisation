@@ -77,7 +77,7 @@ class GeneticAlgorithmOptimizer:
             if i in self.discrete_indices:
                 population[:, i] = np.random.randint(0, 2, self.population_size)
             else:
-                population[:, i] = 10*np.random.uniform(
+                population[:, i] = np.random.uniform(
                     self.lower_bounds[i],
                     self.upper_bounds[i],
                     self.population_size
