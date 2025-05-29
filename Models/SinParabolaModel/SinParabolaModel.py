@@ -24,7 +24,7 @@ class SinParabolaModel(BaseModel):
         super().__init__(**kwargs)
 
         self.true_optimum = None
-        self.func = lambda x: float((x[0] + a[0])**2 + (x[1] + a[1])**2 - b*math.cos(c*x[0] + a[0]*c) - b*math.cos(c*x[1] + a[1]*c))
+        self.func = lambda x: float((x[0] + a[0])**2 + (x[1] + a[1])**2 - b*math.cos(c*x[0] + a[0]*c) - b*math.cos(c*x[1] + a[1]*c)) + 2*b
         """Ограничения никак не влияют на вычисление модели и учитываются только алгоритмом оптимизации"""
 
     def evaluate(self, to_vec: np.ndarray) -> np.ndarray:

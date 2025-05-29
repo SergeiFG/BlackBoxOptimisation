@@ -67,6 +67,8 @@ class Constrained_Gen_Algo_test:
             print(f"Непрерывные в пределах: {np.all(best_solution[:3] >= -250) & np.all(best_solution[:3] <= 500)}")
             print(f"Дискретные бинарные: {best_solution[3] in [0, 1] and best_solution[4] in [0, 1]}")
 
+            print(ep_optimizer.get_optimization_history())
+
         except Exception as e:
             print(f"Ошибка оптимизации: {str(e)}")
             raise
