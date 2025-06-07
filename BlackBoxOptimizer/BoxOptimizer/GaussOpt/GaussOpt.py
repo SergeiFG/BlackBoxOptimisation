@@ -253,8 +253,8 @@ class GaussOpt(BaseOptimizer):
                                         for i, (lb, ub) in enumerate(self.input_bound_of_vec)]
             
             self.output_bound_of_vec = self._bound_func_("from_model")
-            means_y = self.scaler_x.mean_
-            scales_y = self.scaler_x.scale_
+            means_y = self.scaler_y.mean_
+            scales_y = self.scaler_y.scale_
             self.bound_y_scaled = [((lb - means_y[i]) / scales_y[i], (ub - means_y[i]) / scales_y[i])
                                         for i, (lb, ub) in enumerate(self.output_bound_of_vec)]
             
