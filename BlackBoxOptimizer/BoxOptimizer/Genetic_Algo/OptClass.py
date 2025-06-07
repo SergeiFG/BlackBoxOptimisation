@@ -207,10 +207,12 @@ class GeneticAlgorithmOptimizer:
             if len(valid_indices) > 0:
                 best_valid_idx = valid_indices[np.argmin(fitness[valid_indices])]
                 self.best_fitness_history.append(fitness[best_valid_idx])
+                self.output_values_history.append(output_values[best_valid_idx])
                 self.best_individuals_history.append(population[best_valid_idx].copy())
             else:
                 self.best_fitness_history.append(np.inf)
-                self.best_individuals_history.append(population[0].copy())
+                self.output_values_history.append(None)
+                self.best_individuals_history.append(None)
                 
             self.avg_fitness_history.append(np.mean(fitness[np.isfinite(fitness)]) if np.any(np.isfinite(fitness)) else np.inf)
             
@@ -235,15 +237,30 @@ class GeneticAlgorithmOptimizer:
 
         # Финал
         fitness, output_values = self._evaluate(population)
+        self.mutation_rates.append(0)
+
+        # Считаем количество допустимых решений
+        valid_count = np.sum(np.isfinite(fitness))
+        self.num_valid_solutions_history.append(valid_count)  # Записываем в историю
+            
+        # Находим лучшее допустимое решение
         valid_indices = np.where(np.isfinite(fitness))[0]
         if len(valid_indices) > 0:
             best_valid_idx = valid_indices[np.argmin(fitness[valid_indices])]
-            self.best_solution = population[best_valid_idx]
-            self.best_fitness = fitness[best_valid_idx]
-            self.best_output_values = output_values[best_valid_idx]
+            self.best_fitness_history.append(fitness[best_valid_idx])
+            self.output_values_history.append(output_values[best_valid_idx])
+            self.best_individuals_history.append(population[best_valid_idx].copy())
         else:
-            self.best_solution = population[0]
-            self.best_fitness = np.inf
-            self.best_output_values = None
+            self.best_fitness_history.append(np.inf)
+            self.output_values_history.append(None)
+            self.best_individuals_history.append(None)
+                
+        self.avg_fitness_history.append(np.mean(fitness[np.isfinite(fitness)]) if np.any(np.isfinite(fitness)) else np.inf)
+
+        best_index = np.argmin(self.best_fitness_history)
+        self.best_solution = self.best_individuals_history[best_index]
+        self.best_fitness = self.best_individuals_history[best_index]
+        self.best_output_values = self.output_values_history[best_index]
+
             
         return self.best_solution, self.best_fitness, self.best_output_values

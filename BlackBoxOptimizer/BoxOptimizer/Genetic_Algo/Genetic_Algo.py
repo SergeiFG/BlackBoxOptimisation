@@ -24,12 +24,11 @@ class Genetic_Algo(BaseOptimizer):
         self.seed = seed
         self.dimension = to_model_vec_size
         self.population_size = population_size
-        self.generations = iter_limit
+        self.generations = iter_limit-1
         self.init_mutation = init_mutation
         self.min_mutation = min_mutation
         self.elite_size = elite_size
         self.discrete_indices = discrete_indices if discrete_indices is not None else []
-        self.best_output_values = None
         self.optimization_history = None  # Добавлено для хранения истории
 
     def configure(self, **kwargs):
@@ -80,18 +79,20 @@ class Genetic_Algo(BaseOptimizer):
         self.optimization_history = [
             {
                 'generation': gen,
+                'best_MV': ga.best_individuals_history[gen],
                 'best_fitness': ga.best_fitness_history[gen],
                 'average_fitness': ga.avg_fitness_history[gen],
+                'best_CV': ga.output_values_history[gen],
                 'mutation_rate': ga.mutation_rates[gen],
                 'valid_solutions': ga.num_valid_solutions_history[gen]
             }
-            for gen in range(self.generations)
+            for gen in range(self.generations+1)
         ]
         
-        # Сохраняем результаты
+        # Записываем best_x в контейнер BaseOptimizer
         for to_vec in self._to_opt_model_data.iterVectors():
             to_vec[:] = best_x
-        self.best_output_values = best_outputs
+
 
     def get_optimization_history(self) -> List[dict]:
         """Возвращает историю оптимизации в виде списка словарей"""
@@ -124,4 +125,6 @@ class Genetic_Algo(BaseOptimizer):
 
     def getResult(self) -> np.ndarray:
         historical_data = self.getHistoricalData("vec_to_model")
-        return historical_data[-1] if historical_data else np.array([])
+        if historical_data and len(historical_data) > 0:
+            return historical_data[-1]
+        return np.array([])
