@@ -166,18 +166,31 @@ class GaussOpt(BaseOptimizer):
         scaled_output_value = self.scaler_y.transform([output_value])
         self.res_history_to_opt_model_data.append(output_value)
         self.Y_scaled = np.vstack([self.Y_scaled, scaled_output_value])
-        output_value = self.scaler_y.transform([output_value])[0]
-        if self.target_to_opt:
-            if output_value[0]>self.res_of_most_opt_vec:
-                self.res_of_most_opt_vec = output_value[0]
+        output_value_scaled = self.scaler_y.transform([output_value])[0]
+        if self._check_output_constraints(output_values=output_value):
+            if self.target_to_opt and output_value_scaled[0]>self.res_of_most_opt_vec:
+                self.res_of_most_opt_vec = output_value_scaled[0]
                 self.most_opt_vec = next_x
-        else:
-            if output_value[0]<self.res_of_most_opt_vec:
-                self.res_of_most_opt_vec = output_value[0]
+                
+            if not self.target_to_opt and output_value_scaled[0]<self.res_of_most_opt_vec:
+                self.res_of_most_opt_vec = output_value_scaled[0]
                 self.most_opt_vec = next_x
-        
-        
     """Основная функция подсчета"""
+
+    def _check_output_constraints(self, output_values):
+        """Проверка ограничений выходных переменных"""
+        if len(output_values) <= 1:  # Только целевая функция
+            return True
+            
+        # Проверяем только те параметры, для которых заданы ограничения
+        num_output_params = min(len(self.output_bound_of_vec), len(output_values)-1)
+        
+        for i in range(num_output_params):
+            if (output_values[i+1] < self.output_bound_of_vec[i][0] or 
+                output_values[i+1] > self.output_bound_of_vec[i][1]):
+                return False
+        
+        return True
 
     def configure(self, **kwargs):
         kernel_cfg = kwargs.pop('kernel_cfg', None)
@@ -237,14 +250,25 @@ class GaussOpt(BaseOptimizer):
         self.bound_x_scaled = [((lb - means[i]) / scales[i], (ub - means[i]) / scales[i])
                                     for i, (lb, ub) in enumerate(self.input_bound_of_vec)]
 
+        ###
+        
+        self.res_of_most_opt_vec = np.iinfo(np.int64).min if self.target_to_opt else np.iinfo(np.int64).max
 
-        if self.target_to_opt:
-            self.res_of_most_opt_vec = max(np.array(self.Y_scaled)[:,0])
-        else:
-            self.res_of_most_opt_vec = min(np.array(self.Y_scaled)[:,0])
+        for vec in np.array(self.Y_scaled):
+            print(vec)
+            if self._check_output_constraints(output_values=self.scaler_y.inverse_transform([vec])[0]):
+                if self.target_to_opt:
+                    self.res_of_most_opt_vec=vec[0] if vec[0]>self.res_of_most_opt_vec else self.res_of_most_opt_vec
+                    
+                else:
+                    self.res_of_most_opt_vec=vec[0] if vec[0]<self.res_of_most_opt_vec else self.res_of_most_opt_vec
+                    print(vec)
+                    print(self.res_of_most_opt_vec)
+
 
         self.most_opt_vec = self.X_scaled[np.array(self.Y_scaled)[:,0].tolist().index(self.res_of_most_opt_vec)]
 
+        ###
         for _ in range(self._iteration_limitation):
             self.input_bound_of_vec = self._bound_func_("to_model")
             means_x = self.scaler_x.mean_
