@@ -4,8 +4,7 @@ from Models import SquareSumModel, SinParabolaModel
 from typing import List
 
 import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.patches as patches
+
 import random
 import statistics
 from math import sqrt

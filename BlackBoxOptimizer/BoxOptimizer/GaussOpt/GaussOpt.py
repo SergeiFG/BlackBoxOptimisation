@@ -153,6 +153,17 @@ class GaussOpt(BaseOptimizer):
             return np.column_stack(components)
     """Создание первой популяции векторов для нормальной работы метода, необходимо 10*количество MV"""
 
+    def _add_point(self):
+        # Преобразуем входные данные в numpy array для удобства
+        constraints = np.asarray(self.input_bound_of_vec)
+        # Генерируем данные для каждой компоненты отдельно
+        components = [
+                np.random.uniform(low=min_max[0], high=min_max[1], size=1)
+                for min_max in constraints
+        ]  
+        # Транспонируем результат, чтобы векторы были строками матрицы
+        return np.column_stack(components)
+    
     def _main_calc_func(self, func: Callable[[np.ndarray], np.ndarray]):
         self.model.fit(self.X_scaled,self.Y_scaled)
         next_x = self._propose_location()
@@ -253,17 +264,30 @@ class GaussOpt(BaseOptimizer):
         ###
         
         self.res_of_most_opt_vec = np.iinfo(np.int64).min if self.target_to_opt else np.iinfo(np.int64).max
-
         for vec in np.array(self.Y_scaled):
-            print(vec)
             if self._check_output_constraints(output_values=self.scaler_y.inverse_transform([vec])[0]):
                 if self.target_to_opt:
                     self.res_of_most_opt_vec=vec[0] if vec[0]>self.res_of_most_opt_vec else self.res_of_most_opt_vec
                     
                 else:
                     self.res_of_most_opt_vec=vec[0] if vec[0]<self.res_of_most_opt_vec else self.res_of_most_opt_vec
-                    print(vec)
-                    print(self.res_of_most_opt_vec)
+
+
+        if self.res_of_most_opt_vec == np.iinfo(np.int64).min or self.res_of_most_opt_vec==np.iinfo(np.int64).max:
+            while True:
+                point = self._add_point()
+            
+                self.history_to_opt_model_data = np.vstack((self.history_to_opt_model_data, point[0]))
+                point_for_fun=point[0]
+                for idx in self.discrete_indices:
+                    point_for_fun[idx] = 1 if vec[idx]>=0.5 else 0
+                y_point = func(point_for_fun)
+                self.res_history_to_opt_model_data.append(y_point)
+                if self._check_output_constraints(output_values=y_point):
+                    break
+            self.Y_scaled = self.scaler_y.transform(self.res_history_to_opt_model_data)
+            self.X_scaled = self.scaler_x.transform(self.history_to_opt_model_data)
+            self.res_of_most_opt_vec = self.Y_scaled[-1,0]
 
 
         self.most_opt_vec = self.X_scaled[np.array(self.Y_scaled)[:,0].tolist().index(self.res_of_most_opt_vec)]
