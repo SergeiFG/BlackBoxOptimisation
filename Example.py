@@ -127,7 +127,7 @@ warnings.filterwarnings('ignore')
 
 optimizer = Optimizer(
         optCls              = GaussOpt,
-        seed                = 173, # TODO: Проверить, точно ли работает. Сейчас выдаёт разные значения при одном seed
+        seed                = 15, # TODO: Проверить, точно ли работает. Сейчас выдаёт разные значения при одном seed
         to_model_vec_size   = 6,
         from_model_vec_size = 14,
         iter_limit          = 50,

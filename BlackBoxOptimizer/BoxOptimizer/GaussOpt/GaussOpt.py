@@ -164,7 +164,7 @@ class GaussOpt(BaseOptimizer):
         # Транспонируем результат, чтобы векторы были строками матрицы
         return np.column_stack(components)
     
-    def _main_calc_func(self, func: Callable[[np.ndarray], np.ndarray]):
+    def _main_calc_func(self, func: Callable[[np.ndarray], np.ndarray]) -> None:
         self.model.fit(self.X_scaled,self.Y_scaled)
         next_x = self._propose_location()
         self.X_scaled = np.vstack([self.X_scaled, next_x.copy()])
@@ -188,7 +188,7 @@ class GaussOpt(BaseOptimizer):
                 self.most_opt_vec = next_x
     """Основная функция подсчета"""
 
-    def _check_output_constraints(self, output_values):
+    def _check_output_constraints(self, output_values) -> bool:
         """Проверка ограничений выходных переменных"""
         if len(output_values) <= 1:  # Только целевая функция
             return True
@@ -310,7 +310,7 @@ class GaussOpt(BaseOptimizer):
             
     """Функция инициализации и оптимизации"""
 
-    def getResult(self):
+    def getResult(self) -> np.array:
         result = self.most_opt_vec
         true_result = self.scaler_x.inverse_transform([result])
         for idx in self.discrete_indices:
@@ -318,7 +318,7 @@ class GaussOpt(BaseOptimizer):
         return true_result[0]
     """Функция результата, возращает точку"""
 
-    def get_y(self):
+    def get_y(self) -> List:
         result = self.most_opt_vec
         i = np.where((self.history_to_opt_model_data == result).all(axis=1))[0][0]
         return self.res_history_to_opt_model_data[i]
