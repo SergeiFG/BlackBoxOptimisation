@@ -67,16 +67,7 @@ class TestStepOpt(BaseOptimizer):
                 # target_values = [x[0] for x in target_values]
                 """Два варианта обращения к внешней модели, оба работают"""
                 '''Вычисление внешней модели для каждого кандидата, по умолчанию сделано что целевая функция - первый элемент массива'''
-                
-                if hasattr(self, "optimisation_type") and getattr(self, "optimisation_type", None) is not None:
-                    if getattr(self, "optimisation_type") == 1 or getattr(self, "optimisation_type").name == "maximize":
-                        best_idx = int(np.argmax(target_values))
-                    else:
-                        best_idx = int(np.argmin(target_values))
-                else:
-                    best_idx = int(np.argmin(target_values))
-
-                point = candidates[best_idx].copy()
+                point = candidates[np.argmin(target_values)].copy() # Обновляем точку, записываем в неё лучшего из кандидатов
                 """Основной цикл работы модели оптимизации"""
 
             to_vec[:] = point.copy() # Записываем итоговую точку
