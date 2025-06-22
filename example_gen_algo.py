@@ -6,7 +6,7 @@ from Models import SquareSumModel
 class Constrained_Gen_Algo_test:
     def __init__(self):
         # Целевая точка (первые 3 параметра для SquareSumModel)
-        self.target = np.array([135.123, 305.23121, -206.876, 0, 0])
+        self.target = np.array([135.123, 505.23121, -206.876, 0, 0])
         self.dimension = 5  # 3 непрерывных + 2 дискретных
         
         # Инициализация модели (работает только с первыми 3 параметрами)
@@ -17,13 +17,13 @@ class Constrained_Gen_Algo_test:
             optCls=Genetic_Algo,
             seed=42,
             to_model_vec_size=self.dimension,
-            from_model_vec_size=3,  # SquareSumModel возвращает только ошибку
-            iter_limit=10,
+            from_model_vec_size=1,  # SquareSumModel возвращает только ошибку
+            iter_limit=50,
             external_model=self._adapted_model_evaluate,  # Используем адаптер
             # Параметры для EvolutionaryOpt
-            population_size = 200,
+            population_size = 100,
             init_mutation = 0.5,
-            min_mutation = 0.5,
+            min_mutation = 0.05,
             elite_size = 5,
             discrete_indices = [3, 4]
         )
@@ -37,16 +37,11 @@ class Constrained_Gen_Algo_test:
             self.optimizer.setVecItemType(i, "bool", "to_model")
             self.optimizer.setVecItemLimit(i, "to_model", min=0, max=1)
 
-        for i in range(1,3):  # второй и третий параметр - CV
-            self.optimizer.setVecItemLimit(i, "from_model", min=-250, max=5000)
-         #   self.optimizer.setVecItemLimit(i, "to_model", min=-np.inf, max=np.inf)
-
     def _adapted_model_evaluate(self, x):
         """Адаптер для модели, передает только первые 3 параметра, потом добавляет по 100 к целевой
         функции за каждый неверный дискретный параметр"""
         discrete_error = 100 * np.sum(x[3:] != self.target[3:])
-        result = self.model.evaluate(x[:3])
-        return np.array([result[0] + np.array(discrete_error), result[1], result[2]])
+        return self.model.evaluate(x[:3]) + np.array(discrete_error)
 
 
     def run(self):
@@ -57,18 +52,22 @@ class Constrained_Gen_Algo_test:
             
         try:
             self.optimizer.modelOptimize()
-            
-            # Получаем оптимизатор и историю
             ep_optimizer = self.optimizer.getOptimizer()
+            best_solution = ep_optimizer._to_opt_model_data.vecs[:, 0]
+            
+            final_error = self._adapted_model_evaluate(best_solution)
+            
+            print("\n=== Результаты ===")
+            print(f"Лучшее решение: {np.round(best_solution, 4)}")
+            print(f"Финальная ошибка: {final_error[0]}")
+            print(f"Непрерывная часть: {best_solution[:3]}")
+            print(f"Дискретная часть: {best_solution[3:]}")
+            
+            print("\nПроверка ограничений:")
+            print(f"Непрерывные в пределах: {np.all(best_solution[:3] >= -250) & np.all(best_solution[:3] <= 500)}")
+            print(f"Дискретные бинарные: {best_solution[3] in [0, 1] and best_solution[4] in [0, 1]}")
 
-            result = ep_optimizer._to_opt_model_data.vecs[:, 0]
-            history = ep_optimizer.get_optimization_history()
-            print("\n============================================================================\n")
-            for i in range( len(history) ):
-                print(history[i])
-            print("\n============================================================================\n")
-            print(result)
-
+            print(ep_optimizer.get_optimization_history())
 
         except Exception as e:
             print(f"Ошибка оптимизации: {str(e)}")

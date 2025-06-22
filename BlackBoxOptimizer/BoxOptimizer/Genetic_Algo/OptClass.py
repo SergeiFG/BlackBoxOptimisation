@@ -1,15 +1,11 @@
 import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.gridspec import GridSpec
-
 
 class GeneticAlgorithmOptimizer:
     def __init__(self, func, dimension=5, population_size=100, generations=150,
                  init_mutation=0.5, min_mutation=0.2, elite_size=5,
                  lower_bounds=None, upper_bounds=None,
                  output_lower_bounds=None, output_upper_bounds=None,
-                 discrete_indices=None, base_penalty=1e6, adaptive_penalty=True,
-                 penalty_exponent=2, feasibility_phase_generations=0.3):
+                 discrete_indices=None):
         self.func = func
         self.dimension = dimension
         self.population_size = population_size
@@ -18,32 +14,21 @@ class GeneticAlgorithmOptimizer:
         self.min_mutation = min_mutation
         self.elite_size = elite_size
         self.discrete_indices = discrete_indices if discrete_indices is not None else []
-        self.base_penalty = base_penalty
-        self.adaptive_penalty = adaptive_penalty
-        self.penalty_exponent = penalty_exponent
-        self.current_generation = 0
-        self.feasibility_phase = True
-        self.feasibility_phase_generations = int(generations * feasibility_phase_generations)
-        self.best_feasible_solution = None
-        self.best_feasible_fitness = np.inf
-        self.best_feasible_output = None
-        self.best_infeasible_solution = None
-        self.best_infeasible_violation = np.inf
-        self.best_infeasible_output = None
 
-        # Инициализация границ входных параметров
+        # Инициализация границ
         self.lower_bounds = np.full(dimension, -np.inf)
         self.upper_bounds = np.full(dimension, np.inf)
 
+        # Применение пользовательских границ
         if lower_bounds is not None:
-            self.lower_bounds[:len(lower_bounds)] = lower_bounds[:dimension]
+            self.lower_bounds[:len(lower_bounds)] = lower_bounds
         if upper_bounds is not None:
-            self.upper_bounds[:len(upper_bounds)] = upper_bounds[:dimension]
+            self.upper_bounds[:len(upper_bounds)] = upper_bounds
 
+        # Установка [0,1] для дискретных параметров
         for idx in self.discrete_indices:
-            if idx < dimension:
-                self.lower_bounds[idx] = 0
-                self.upper_bounds[idx] = 1
+            self.lower_bounds[idx] = 0
+            self.upper_bounds[idx] = 1
 
         # Вычисление максимального конечного диапазона
         self.max_finite_diap = self._calculate_max_finite_diap()
@@ -64,43 +49,15 @@ class GeneticAlgorithmOptimizer:
                 self.lower_bounds[j] = -self.max_finite_diap / 2
                 self.upper_bounds[j] = self.max_finite_diap / 2
 
-        # Инициализация границ выходных параметров (включая целевую функцию)
-        self.output_lower_bounds = np.array([])
-        self.output_upper_bounds = np.array([])
-        
-        if output_lower_bounds is not None:
-            self.output_lower_bounds = np.array(output_lower_bounds).flatten()
-        if output_upper_bounds is not None:
-            self.output_upper_bounds = np.array(output_upper_bounds).flatten()
-            
-        # Автоматическое расширение границ если размеры не совпадают
-        n_output = max(len(self.output_lower_bounds), len(self.output_upper_bounds))
-        if n_output > 0:
-            if len(self.output_lower_bounds) == 0:
-                self.output_lower_bounds = np.full(n_output, -np.inf)
-            elif len(self.output_lower_bounds) < n_output:
-                self.output_lower_bounds = np.pad(
-                    self.output_lower_bounds, 
-                    (0, n_output - len(self.output_lower_bounds)),
-                    'constant',
-                    constant_values=-np.inf
-                )
-                
-            if len(self.output_upper_bounds) == 0:
-                self.output_upper_bounds = np.full(n_output, np.inf)
-            elif len(self.output_upper_bounds) < n_output:
-                self.output_upper_bounds = np.pad(
-                    self.output_upper_bounds, 
-                    (0, n_output - len(self.output_upper_bounds)),
-                    'constant',
-                    constant_values=np.inf
-                )
-
-        # Исторические данные (только необходимые)
-        self.best_individuals_history = []  # Лучший вектор MV за поколение
-        self.output_values_history = []     # Соответствующий вектор CV
-        self.num_valid_solutions_history = []  # Количество допустимых решений
-        self.avg_fitness_history = []       # Среднее значение целевой функции
+        # Инициализация остальных параметров
+        self.output_lower_bounds = np.array([]) if output_lower_bounds is None else np.array(output_lower_bounds)
+        self.output_upper_bounds = np.array([]) if output_upper_bounds is None else np.array(output_upper_bounds)
+        self.best_fitness_history = []
+        self.avg_fitness_history = []
+        self.mutation_rates = []
+        self.output_values_history = []
+        self.best_individuals_history = []
+        self.num_valid_solutions_history = []
 
     def _calculate_max_finite_diap(self):
         max_diap = -np.inf
@@ -112,6 +69,7 @@ class GeneticAlgorithmOptimizer:
                 if current_diap > max_diap:
                     max_diap = current_diap
         return max_diap if np.isfinite(max_diap) else 1000.0
+    
 
     def _initialize_population(self):
         population = np.empty((self.population_size, self.dimension))
@@ -130,99 +88,59 @@ class GeneticAlgorithmOptimizer:
         decay_rate = np.log(self.init_mutation / self.min_mutation) / self.generations
         return self.init_mutation * np.exp(-decay_rate * generation)
 
-    def _calculate_constraint_violation(self, output_values):
-        """Вычисляет сумму нарушений по всем выходным параметрам (включая целевую функцию)"""
-        if len(self.output_lower_bounds) == 0 or len(output_values) == 0:
-            return 0.0
-            
-        # Проверяем все выходные параметры
-        n = min(len(output_values), len(self.output_lower_bounds))
-        
-        if n == 0:
-            return 0.0
-            
-        # Вычисляем нарушения для каждой границы
-        lower_violations = np.maximum(self.output_lower_bounds[:n] - output_values[:n], 0)
-        upper_violations = np.maximum(output_values[:n] - self.output_upper_bounds[:n], 0)
-        
-        # Суммируем квадраты нарушений
-        total_violation = np.sum(lower_violations**2) + np.sum(upper_violations**2)
-        return total_violation
-
-    def _get_penalty_coeff(self):
-        if not self.adaptive_penalty:
-            return self.base_penalty
-            
-        progress = min(1.0, max(0.0, self.current_generation / self.generations))
-        return self.base_penalty * (progress ** self.penalty_exponent)
-
-    def _is_feasible(self, output_values):
-        """Проверяет, удовлетворяет ли решение всем ограничениям (включая целевую функцию)"""
-        if len(self.output_lower_bounds) == 0 or len(output_values) == 0:
+    def _check_output_constraints(self, output_values):
+        if len(self.output_lower_bounds) == 0 or len(self.output_upper_bounds) == 0:
             return True
             
-        n = min(len(output_values), len(self.output_lower_bounds))
-        
-        for i in range(n):
-            if (output_values[i] < self.output_lower_bounds[i] or 
-                output_values[i] > self.output_upper_bounds[i]):
+        if len(output_values) <= 1:
+            return True
+            
+        num_output_params = min(len(self.output_lower_bounds), len(output_values)-1)
+        for i in range(num_output_params):
+            if (output_values[i+1] < self.output_lower_bounds[i] or 
+                output_values[i+1] > self.output_upper_bounds[i]):
                 return False
         return True
 
-    def _evaluate(self, population):
+    def _evaluate(self, population, ask_time=100):
         fitness_values = []
         output_values_list = []
-        violations = []
-        feasibility = []
+        valid_indices = []
         
-        for ind in population:
-            output = self.func(ind)
-            violation = self._calculate_constraint_violation(output)
-            is_feasible = self._is_feasible(output)
-            
-            violations.append(violation)
-            feasibility.append(is_feasible)
-            output_values_list.append(output)
-            
-            # Двухэтапная оценка приспособленности
-            if self.feasibility_phase:
-                # В фазе поиска допустимых решений минимизируем нарушения
-                fitness = violation
-            else:
-                # В фазе оптимизации:
-                if is_feasible:
-                    # Для допустимых решений используем целевую функцию (первый выход)
-                    fitness = output[0]
-                else:
-                    # Для недопустимых - большой штраф
-                    fitness = 1e20 + violation
-                    
-            fitness_values.append(fitness)
+        for idx, ind in enumerate(population):
+            output_values = self.func(ind)
+            if self._check_output_constraints(output_values):
+                fitness_values.append(output_values[0])
+                output_values_list.append(output_values)
+                valid_indices.append(idx)
         
-        return (
-            np.array(fitness_values),
-            np.array(output_values_list, dtype=object),
-            np.array(violations),
-            np.array(feasibility)
-        )
+        # Если нет ни одного допустимого решения, возвращаем худшие возможные значения
+        if not fitness_values:
+            return np.full(len(population), np.inf), np.array([])
+            
+        # Для недопустимых решений устанавливаем худшую возможную приспособленность
+        final_fitness = np.full(len(population), np.inf)
+        final_outputs = np.array([None] * len(population))
+        
+        for i, idx in enumerate(valid_indices):
+            final_fitness[idx] = fitness_values[i]
+            final_outputs[idx] = output_values_list[i]
+            
+        return final_fitness, final_outputs
 
     def _selection(self, population, fitness, num_parents):
-        # Все решения имеют конечную приспособленность
-        # Нормализуем приспособленность для избежания проблем с нулями
-        min_fitness = np.min(fitness)
-        normalized_fitness = fitness - min_fitness + 1e-10
+        # Выбираем только допустимые решения (с конечной приспособленностью)
+        valid_indices = np.where(np.isfinite(fitness))[0]
+        if len(valid_indices) == 0:
+            return population[np.random.choice(len(population), size=num_parents, replace=True)]
+            
+        valid_population = population[valid_indices]
+        valid_fitness = fitness[valid_indices]
         
-        # Инвертируем приспособленность для минимизации
-        inverted_fitness = 1 / normalized_fitness
+        inverted_fitness = 1 / (1 + valid_fitness)
         probabilities = inverted_fitness / np.sum(inverted_fitness)
-        
-        parent_indices = np.random.choice(
-            range(len(population)), 
-            size=num_parents, 
-            p=probabilities,
-            replace=True
-        )
-        return population[parent_indices]
+        parent_indices = np.random.choice(range(len(valid_population)), size=num_parents, p=probabilities)
+        return valid_population[parent_indices]
 
     def _crossover(self, parents, offspring_size):
         offspring = np.empty(offspring_size)
@@ -264,91 +182,68 @@ class GeneticAlgorithmOptimizer:
                         max_step = diap * mutation_strength
                         mutation = np.random.uniform(-max_step, max_step)
                         new_value = offspring[i][j] + mutation
-                        if np.isfinite(lb) and np.isfinite(ub):
-                            new_value = np.clip(new_value, lb, ub)
-                        else:
-                            if np.isfinite(lb): new_value = max(lb, new_value)
-                            if np.isfinite(ub): new_value = min(ub, new_value)
+                        new_value = np.clip(new_value, lb, ub) if np.isfinite(lb) and np.isfinite(ub) else max(lb, min(ub, new_value))
                         offspring[i][j] = new_value
         return offspring
 
     def _enforce_bounds(self, x):
         x_clipped = np.clip(x, self.lower_bounds, self.upper_bounds)
         for idx in self.discrete_indices:
-            if idx < len(x_clipped):
-                x_clipped[idx] = 1 if x_clipped[idx] >= 0.5 else 0
+            x_clipped[idx] = 1 if x_clipped[idx] >= 0.5 else 0
         return x_clipped
 
     def run(self):
         population = self._initialize_population()
-        
         for gen in range(self.generations):
-            self.current_generation = gen
+            fitness, output_values = self._evaluate(population)
+            self.mutation_rates.append(self._get_current_mutation_rate(gen))
+
+            # Считаем количество допустимых решений
+            valid_count = np.sum(np.isfinite(fitness))
+            self.num_valid_solutions_history.append(valid_count)  # Записываем в историю
             
-            # Определяем текущую фазу
-            if gen > self.feasibility_phase_generations:
-                self.feasibility_phase = False
+            # Находим лучшее допустимое решение
+            valid_indices = np.where(np.isfinite(fitness))[0]
+            if len(valid_indices) > 0:
+                best_valid_idx = valid_indices[np.argmin(fitness[valid_indices])]
+                self.best_fitness_history.append(fitness[best_valid_idx])
+                self.best_individuals_history.append(population[best_valid_idx].copy())
+            else:
+                self.best_fitness_history.append(np.inf)
+                self.best_individuals_history.append(population[0].copy())
                 
-            # Оценка популяции
-            fitness, outputs, violations, feasibility = self._evaluate(population)
-            feasible_indices = np.where(feasibility)[0]
+            self.avg_fitness_history.append(np.mean(fitness[np.isfinite(fitness)]) if np.any(np.isfinite(fitness)) else np.inf)
             
-            # Сохраняем лучшее допустимое решение (по CV0)
-            if len(feasible_indices) > 0:
-                feasible_cv0 = [outputs[i][0] for i in feasible_indices]
-                best_feasible_idx_in_feasible = np.argmin(feasible_cv0)
-                best_feasible_idx = feasible_indices[best_feasible_idx_in_feasible]
-                candidate_cv0 = feasible_cv0[best_feasible_idx_in_feasible]
+            # Элитизм - выбираем только допустимые решения
+            valid_indices = np.where(np.isfinite(fitness))[0]
+            if len(valid_indices) > 0:
+                valid_fitness = fitness[valid_indices]
+                valid_population = population[valid_indices]
+                elite_indices = np.argsort(valid_fitness)[:min(self.elite_size, len(valid_fitness))]
+                elite = valid_population[elite_indices]
+            else:
+                elite = population[:self.elite_size]  # если нет допустимых, берем первых
                 
-                if candidate_cv0 < self.best_feasible_fitness:
-                    self.best_feasible_solution = population[best_feasible_idx].copy()
-                    self.best_feasible_fitness = candidate_cv0
-                    self.best_feasible_output = outputs[best_feasible_idx]
-            
-            # Сохраняем лучшее недопустимое решение (по минимальному нарушению)
-            for i in range(len(population)):
-                if not feasibility[i]:
-                    if violations[i] < self.best_infeasible_violation:
-                        self.best_infeasible_solution = population[i].copy()
-                        self.best_infeasible_violation = violations[i]
-                        self.best_infeasible_output = outputs[i]
-            
-            # Сохраняем историю текущего поколения
-            all_cv0 = [output[0] for output in outputs]
-            best_idx = np.argmin(fitness)
-            
-            self.best_individuals_history.append(population[best_idx].copy())
-            self.output_values_history.append(outputs[best_idx])
-            self.num_valid_solutions_history.append(len(feasible_indices))
-            self.avg_fitness_history.append(np.mean(all_cv0))
-            
-            # Элитизм - лучшие решения в текущей фазе
-            elite_indices = np.argsort(fitness)[:self.elite_size]
-            elite = population[elite_indices]
-            
             # Селекция и кроссовер
             parents = self._selection(population, fitness, self.population_size - len(elite))
             offspring = self._crossover(parents, (self.population_size - len(elite), self.dimension))
             
             # Мутация
             mutated_offspring = self._mutate(offspring, gen)
-            
-            # Формирование новой популяции
             population = np.vstack([mutated_offspring, elite])
             population = np.array([self._enforce_bounds(ind) for ind in population])
 
-        # После завершения всех поколений:
-        # Если нашли допустимые решения - возвращаем лучшее
-        if self.best_feasible_solution is not None:
-            return (
-                self.best_feasible_solution, 
-                self.best_feasible_fitness, 
-                self.best_feasible_output
-            )
-        
-        # Если не нашли допустимых решений - возвращаем лучшее недопустимое
-        return (
-            self.best_infeasible_solution, 
-            self.best_infeasible_output[0], 
-            self.best_infeasible_output
-        )
+        # Финал
+        fitness, output_values = self._evaluate(population)
+        valid_indices = np.where(np.isfinite(fitness))[0]
+        if len(valid_indices) > 0:
+            best_valid_idx = valid_indices[np.argmin(fitness[valid_indices])]
+            self.best_solution = population[best_valid_idx]
+            self.best_fitness = fitness[best_valid_idx]
+            self.best_output_values = output_values[best_valid_idx]
+        else:
+            self.best_solution = population[0]
+            self.best_fitness = np.inf
+            self.best_output_values = None
+            
+        return self.best_solution, self.best_fitness, self.best_output_values

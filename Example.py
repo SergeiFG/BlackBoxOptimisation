@@ -53,6 +53,3 @@ if __name__ == "__main__":
     print(currentOptimizer.getResult())
     print(model.evaluate(currentOptimizer.getResult()))
     print(currentOptimizer.get_y())
-
-
-

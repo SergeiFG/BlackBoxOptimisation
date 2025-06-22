@@ -193,26 +193,14 @@ class GaussOpt(BaseOptimizer):
         if len(output_values) <= 1:  # Только целевая функция
             return True
             
-        # Для отладки выводим ограничения и значения (добавить для отладки)
-        # print(f"[GaussOpt] Проверка ограничений: output_values={output_values}")
-        # print(f"[GaussOpt] Границы: output_bound_of_vec={self.output_bound_of_vec}")
+        # Проверяем только те параметры, для которых заданы ограничения
+        num_output_params = min(len(self.output_bound_of_vec), len(output_values)-1)
         
-        # Сравниваем те элементы output_values, 
-        # которые имеют соответствующие ограничения в output_bound_of_vec
-        for i in range(len(output_values)):
-            # Индекс 0 - целевая функция без ограничений, пропускаем
-            if i == 0:
-                continue
-            
-            # Проверка существования ограничения для i-го элемента
-            if i-1 < len(self.output_bound_of_vec):
-                lb, ub = self.output_bound_of_vec[i-1]
-                val = output_values[i]
-                
-                if val < lb or val > ub:
-                    # print(f"[GaussOpt] Нарушение: output_values[{i}]={val} не в пределах [{lb}, {ub}]")
-                    return False
-
+        for i in range(num_output_params):
+            if (output_values[i+1] < self.output_bound_of_vec[i][0] or 
+                output_values[i+1] > self.output_bound_of_vec[i][1]):
+                return False
+        
         return True
 
     def configure(self, **kwargs):
