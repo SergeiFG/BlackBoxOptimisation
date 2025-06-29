@@ -1,3 +1,15 @@
+altgraph==0.17.4
+grpcio==1.71.0
+grpcio-tools==1.71.0
+joblib==1.5.1
 numpy==2.2.4
+packaging==25.0
+pefile==2023.2.7
+protobuf==5.29.5
+pyinstaller==6.13.0
+pyinstaller-hooks-contrib==2025.4
+pywin32-ctypes==0.2.3
 scikit-learn==1.6.1
-scipy==1.15.2
+scipy==1.15.3
+setuptools==80.9.0
+threadpoolctl==3.6.0

@@ -153,7 +153,18 @@ class GaussOpt(BaseOptimizer):
             return np.column_stack(components)
     """Создание первой популяции векторов для нормальной работы метода, необходимо 10*количество MV"""
 
-    def _main_calc_func(self, func: Callable[[np.ndarray], np.ndarray]):
+    def _add_point(self):
+        # Преобразуем входные данные в numpy array для удобства
+        constraints = np.asarray(self.input_bound_of_vec)
+        # Генерируем данные для каждой компоненты отдельно
+        components = [
+                np.random.uniform(low=min_max[0], high=min_max[1], size=1)
+                for min_max in constraints
+        ]  
+        # Транспонируем результат, чтобы векторы были строками матрицы
+        return np.column_stack(components)
+    
+    def _main_calc_func(self, func: Callable[[np.ndarray], np.ndarray]) -> None:
         self.model.fit(self.X_scaled,self.Y_scaled)
         next_x = self._propose_location()
         self.X_scaled = np.vstack([self.X_scaled, next_x.copy()])
@@ -166,18 +177,31 @@ class GaussOpt(BaseOptimizer):
         scaled_output_value = self.scaler_y.transform([output_value])
         self.res_history_to_opt_model_data.append(output_value)
         self.Y_scaled = np.vstack([self.Y_scaled, scaled_output_value])
-        output_value = self.scaler_y.transform([output_value])[0]
-        if self.target_to_opt:
-            if output_value[0]>self.res_of_most_opt_vec:
-                self.res_of_most_opt_vec = output_value[0]
+        output_value_scaled = self.scaler_y.transform([output_value])[0]
+        if self._check_output_constraints(output_values=output_value):
+            if self.target_to_opt and output_value_scaled[0]>self.res_of_most_opt_vec:
+                self.res_of_most_opt_vec = output_value_scaled[0]
                 self.most_opt_vec = next_x
-        else:
-            if output_value[0]<self.res_of_most_opt_vec:
-                self.res_of_most_opt_vec = output_value[0]
+                
+            if not self.target_to_opt and output_value_scaled[0]<self.res_of_most_opt_vec:
+                self.res_of_most_opt_vec = output_value_scaled[0]
                 self.most_opt_vec = next_x
-        
-        
     """Основная функция подсчета"""
+
+    def _check_output_constraints(self, output_values) -> bool:
+        """Проверка ограничений выходных переменных"""
+        if len(output_values) <= 1:  # Только целевая функция
+            return True
+            
+        # Проверяем только те параметры, для которых заданы ограничения
+        num_output_params = min(len(self.output_bound_of_vec), len(output_values)-1)
+        
+        for i in range(num_output_params):
+            if (output_values[i+1] < self.output_bound_of_vec[i][0] or 
+                output_values[i+1] > self.output_bound_of_vec[i][1]):
+                return False
+        
+        return True
 
     def configure(self, **kwargs):
         kernel_cfg = kwargs.pop('kernel_cfg', None)
@@ -237,14 +261,38 @@ class GaussOpt(BaseOptimizer):
         self.bound_x_scaled = [((lb - means[i]) / scales[i], (ub - means[i]) / scales[i])
                                     for i, (lb, ub) in enumerate(self.input_bound_of_vec)]
 
+        ###
+        
+        self.res_of_most_opt_vec = np.iinfo(np.int64).min if self.target_to_opt else np.iinfo(np.int64).max
+        for vec in np.array(self.Y_scaled):
+            if self._check_output_constraints(output_values=self.scaler_y.inverse_transform([vec])[0]):
+                if self.target_to_opt:
+                    self.res_of_most_opt_vec=vec[0] if vec[0]>self.res_of_most_opt_vec else self.res_of_most_opt_vec
+                    
+                else:
+                    self.res_of_most_opt_vec=vec[0] if vec[0]<self.res_of_most_opt_vec else self.res_of_most_opt_vec
 
-        if self.target_to_opt:
-            self.res_of_most_opt_vec = max(np.array(self.Y_scaled)[:,0])
-        else:
-            self.res_of_most_opt_vec = min(np.array(self.Y_scaled)[:,0])
+
+        if self.res_of_most_opt_vec == np.iinfo(np.int64).min or self.res_of_most_opt_vec==np.iinfo(np.int64).max:
+            while True:
+                point = self._add_point()
+            
+                self.history_to_opt_model_data = np.vstack((self.history_to_opt_model_data, point[0]))
+                point_for_fun=point[0]
+                for idx in self.discrete_indices:
+                    point_for_fun[idx] = 1 if vec[idx]>=0.5 else 0
+                y_point = func(point_for_fun)
+                self.res_history_to_opt_model_data.append(y_point)
+                if self._check_output_constraints(output_values=y_point):
+                    break
+            self.Y_scaled = self.scaler_y.transform(self.res_history_to_opt_model_data)
+            self.X_scaled = self.scaler_x.transform(self.history_to_opt_model_data)
+            self.res_of_most_opt_vec = self.Y_scaled[-1,0]
+
 
         self.most_opt_vec = self.X_scaled[np.array(self.Y_scaled)[:,0].tolist().index(self.res_of_most_opt_vec)]
 
+        ###
         for _ in range(self._iteration_limitation):
             self.input_bound_of_vec = self._bound_func_("to_model")
             means_x = self.scaler_x.mean_
@@ -253,8 +301,8 @@ class GaussOpt(BaseOptimizer):
                                         for i, (lb, ub) in enumerate(self.input_bound_of_vec)]
             
             self.output_bound_of_vec = self._bound_func_("from_model")
-            means_y = self.scaler_x.mean_
-            scales_y = self.scaler_x.scale_
+            means_y = self.scaler_y.mean_
+            scales_y = self.scaler_y.scale_
             self.bound_y_scaled = [((lb - means_y[i]) / scales_y[i], (ub - means_y[i]) / scales_y[i])
                                         for i, (lb, ub) in enumerate(self.output_bound_of_vec)]
             
@@ -262,7 +310,7 @@ class GaussOpt(BaseOptimizer):
             
     """Функция инициализации и оптимизации"""
 
-    def getResult(self):
+    def getResult(self) -> np.array:
         result = self.most_opt_vec
         true_result = self.scaler_x.inverse_transform([result])
         for idx in self.discrete_indices:
@@ -270,7 +318,7 @@ class GaussOpt(BaseOptimizer):
         return true_result[0]
     """Функция результата, возращает точку"""
 
-    def get_y(self):
+    def get_y(self) -> List:
         result = self.most_opt_vec
         i = np.where((self.history_to_opt_model_data == result).all(axis=1))[0][0]
         return self.res_history_to_opt_model_data[i]
